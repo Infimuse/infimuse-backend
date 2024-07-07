@@ -1,0 +1,15 @@
+extends baseEmail
+
+block content
+  p Hi #{firstName},Experience ticket,
+  p Below is the ticket, please keep it safe since it will be scanned at the gate and if it happens to be in use by another person, you will not be able to access the class.
+  p Ticket: 
+  if qrCodeURL
+    img(src=qrCodeURL alt='QR code' style='width:200px;height:200px;')
+  else
+    p No QR code available.
+  p See you then in your scheduled class.
+  p You can now join a group where the host will be sharing all the information via 
+  p #{channelLink} this link
+  p Thank you,
+  p - Akash Gahuri, CEO Infimuse

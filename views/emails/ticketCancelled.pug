@@ -1,0 +1,19 @@
+extends baseEmail
+
+block content
+    p Hi #{firstName},
+    p We hope this email finds you well. 
+    p This is to confirm the cancellation of your ticket f. We understand that plans change, and we appreciate you taking the time to notify us of the cancellation. ,
+    h4 Cancellatiion Details:
+        ul Ticket: #{url}
+        ul Event Title: #{title}
+        ul Event details: #{listingDescription}
+        ul Date: #{date}
+        ul Refundable Amount:ksh #{amount} 
+    p please note the following 
+        li The refund might take upto a week to be processed, also note that the amount refunded will not be exact because of the transaction costs.
+        li The canceled ticket cannot be retrieved by any means.
+        li The canceled ticket cannot be used. 
+    p Incase you have any question please reach out to us. 
+    p Thankyou
+    p - Akash Gahuri, CEO Infimuse

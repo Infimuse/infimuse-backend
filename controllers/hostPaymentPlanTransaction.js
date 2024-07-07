@@ -1,0 +1,10 @@
+const jwt = require("jsonwebtoken");
+const db = require("../models");
+const HostPaymentPlanTransaction = db.hostPaymentPlanTransactions;
+const Workshop = db.workshops;
+const PackageClasses = db.packageClasses;
+const ClassSession = db.classSessions;
+const HostPlan = db.hostPlans;
+const Host = db.hosts;
+const factory = require("./factory");
+exports.createPlanPayment = factory.createDoc(HostPaymentPlanTransaction);

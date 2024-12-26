@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 const packageSessionController = require("./../controllers/packageSessionController");
 const hostAuthController = require("./../controllers/hostAuthController");
-// const roleRestrict = require("./../utils/midlewares/packageSessionMiddleware");
+const packageTicket = require("./../controllers/packageTicketController");
 
 router.post(
   "/:packageSessionId/comments",
   packageSessionController.packageSessionComments
 );
+router.post("/:packageClassId/scan", packageTicket.ticketScan);
 
 router
   .route("/")

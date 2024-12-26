@@ -16,6 +16,7 @@ router
     classTicketController.initializeBookingPayment
   );
 router.get("/verify", classTicketController.verifyPayment);
+router.post("/free", classTicketController.createFreeClassTickets);
 
 router
   .route("/:id")

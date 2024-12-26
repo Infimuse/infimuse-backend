@@ -12,7 +12,11 @@ module.exports = (sequelize, DataTypes) => {
       imageUrl2: DataTypes.TEXT,
       imageUrl3: DataTypes.TEXT,
       qualifications: DataTypes.STRING,
-      verified: DataTypes.BOOLEAN,
+      verified: { type: DataTypes.BOOLEAN, defaultValue: false },
+      rating: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0,
+      },
       hostTitle: {
         type: DataTypes.ENUM,
         values: ["INDIVIDUAL", "PROFESSIONAL", "BUSINESS", "STAFF"],
@@ -34,6 +38,8 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
       },
+      legit: { type: DataTypes.BOOLEAN, defaultValue: false },
+      vetted: { type: DataTypes.BOOLEAN, defaultValue: false },
     },
     {
       hooks: {

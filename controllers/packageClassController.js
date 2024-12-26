@@ -81,6 +81,13 @@ const getAuthToken = async () => {
 };
 
 exports.createPackageClass = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "please login" });
+  }
+
+  const decodedToken = jwt.verify(token, jwtSecret);
+  const hostId = decodedToken.id;
   try {
     const doc = await PackageClass.create({
       title: req.body.title,
@@ -97,7 +104,7 @@ exports.createPackageClass = async (req, res, next) => {
       ageMin: req.body.ageMin,
       ageMax: req.body.ageMax,
       templateStatus: req.body.templateStatus,
-      hostId: req.body.hostId,
+      hostId,
     });
 
     const packageClassId = doc.id;
@@ -116,9 +123,8 @@ exports.createPackageClass = async (req, res, next) => {
         `${mattermostUrl}/channels`,
         {
           name,
-          display_name: doc.title,
+          display_name: `${uniqueChannelName}-${doc.title}`,
           team_id,
-          display_name: doc.title,
           header: doc.title,
           type: "O",
         },
@@ -290,11 +296,11 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
   const amount = package.price;
 
   const paymentDetails = {
-    amount,
+    amount: amount * 100,
     email,
     callback_url: callbackUrl,
     metadata: {
-      amount,
+      amount: amount * 100,
       email,
       name,
     },

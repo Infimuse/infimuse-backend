@@ -15,6 +15,8 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "upcoming",
       },
+      attendance: { type: DataTypes.INTEGER, defaultValue: 0 },
+      lastScannedAt: { type: DataTypes.DATE },
     },
     {}
   );

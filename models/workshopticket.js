@@ -29,7 +29,6 @@ module.exports = (sequelize, DataTypes) => {
           ticket.ticketId = workshopTicket;
         },
       },
-      timestamps: false,
     }
   );
 

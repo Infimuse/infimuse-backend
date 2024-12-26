@@ -7,6 +7,7 @@ const authController = require("./../controllers/authController");
 router.post("/cancelticket/:ticketId", packageTicketController.cancelTicket);
 router.get("/verify", packageTicketController.verifyPayment);
 router.post("/scan", packageTicketController.ticketScan);
+router.post("/free", packageTicketController.createFreePackageTickets);
 
 router
   .route("/")

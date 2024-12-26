@@ -3,10 +3,12 @@ const router = express.Router();
 const hostAuthController = require("./../controllers/hostAuthController");
 const roleRestrict = require("./../utils/midlewares/classSessionMiddleware");
 const classSession = require("../controllers/classSessionController");
+const classSessionTicket = require("../controllers/classTicketController");
 // const classPayout = require("./../utils/midlewares/classPayout");
 // router.post("/:id/payouts", classPayout.classPayout);
 
 router.post("/rating/:classId", classSession.rateClass);
+router.post("/:classId/scan", classSessionTicket.ticketScan);
 router.get("/book/:classId", classSession.initializeBookingPayment);
 router.get("/ticket/verify", classSession.verifyPayment);
 router.get("/chat-room/:classId", classSession.verifyChatRoom);

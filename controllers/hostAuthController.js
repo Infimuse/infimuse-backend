@@ -168,7 +168,15 @@ exports.hostLogin = async (req, res, next) => {
       }
 
       const token = signToken(host.id);
-      return res.status(200).json({ msg: "Logged in", token });
+      return res
+        .status(200)
+        .json({
+          msg: "Logged in",
+          token,
+          name: host.firstName,
+          email: host.email,
+          phone: host.phone,
+        });
     }
   } catch (error) {
     console.log(error);

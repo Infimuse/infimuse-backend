@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   const SubCategory = sequelize.define("subCategory", {
-    title: DataTypes.STRING,
+    name: DataTypes.STRING,
   });
   return SubCategory;
 };

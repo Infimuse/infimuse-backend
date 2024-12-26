@@ -70,7 +70,7 @@ exports.guestClassTicket = asyncWrapper(async (req, res) => {
     });
   }
   const hostId = classSession.hostId;
-  const amount = classSession.price;
+  const amount = classSession.price * 100;
 
   const paymentDetails = {
     amount,
@@ -131,7 +131,7 @@ exports.guestWorkshopTicket = asyncWrapper(async (req, res) => {
     });
   }
   const hostId = workshop.hostId;
-  const amount = workshop.price;
+  const amount = workshop.price * 100;
 
   const paymentDetails = {
     amount,
@@ -192,7 +192,7 @@ exports.guestPackageTicket = asyncWrapper(async (req, res) => {
     });
   }
   const hostId = package.hostId;
-  const amount = package.price;
+  const amount = package.price * 100;
 
   const paymentDetails = {
     amount,
@@ -252,7 +252,7 @@ exports.guestExperienceTicket = asyncWrapper(async (req, res) => {
     });
   }
   const hostId = experience.hostId;
-  const amount = experience.price;
+  const amount = experience.price * 100;
 
   const paymentDetails = {
     amount,

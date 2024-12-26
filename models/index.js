@@ -32,6 +32,7 @@ db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
 db.ratings = require("./rating")(sequelize, DataTypes);
+db.admins = require("./admin")(sequelize, DataTypes);
 db.classSessions = require("./classsession")(sequelize, DataTypes);
 db.serverApproval = require("./serverApproval")(sequelize, DataTypes);
 db.wallets = require("./wallet")(sequelize, DataTypes);
@@ -51,6 +52,10 @@ db.payouts = require("./payout")(sequelize, DataTypes);
 db.reviewComments = require("./reviewcomment")(sequelize, DataTypes);
 db.waitlists = require("./waitlist")(sequelize, DataTypes);
 db.workshops = require("./workshop")(sequelize, DataTypes);
+db.freeworkshops = require("./freeWorkshop")(sequelize, DataTypes);
+db.freeClassSessions = require("./freeClassSession")(sequelize, DataTypes);
+db.freeExperiences = require("./freeExperience")(sequelize, DataTypes);
+db.freePackageClasses = require("./freePackageClass")(sequelize, DataTypes);
 db.workshopClasses = require("./workshopclass")(sequelize, DataTypes);
 db.workshopTickets = require("./workshopticket")(sequelize, DataTypes);
 db.documents = require("./document")(sequelize, DataTypes);
@@ -73,23 +78,93 @@ db.staffs = require("./staff")(sequelize, DataTypes);
 db.messages = require("./message")(sequelize, DataTypes);
 db.acceptInvites = require("./acceptInvite")(sequelize, DataTypes);
 db.staffPermissions = require("./staffPermission")(sequelize, DataTypes);
+db.monthlySubsRecord = require("./monthlySubsRecord")(sequelize, DataTypes);
+db.DST = require("./DST")(sequelize, DataTypes);
+db.sessionBookings = require("./sessionBooking")(sequelize, DataTypes);
+db.monthlyRevenue = require("./monthlyRevenue")(sequelize, DataTypes);
+db.InfimuseAccount = require("./infimuseAccount")(sequelize, DataTypes);
+db.commissions = require("./commision")(sequelize, DataTypes);
 db.hostPaymentPlanTransactions = require("./hostPaymentPlanTransaction")(
   sequelize,
   DataTypes
 );
 db.experiences = require("./experience")(sequelize, DataTypes);
+db.withdrawals = require("./withdrawal")(sequelize, DataTypes);
+db.invites = require("./inviteStaff")(sequelize, DataTypes);
 db.communities = require("./community")(sequelize, DataTypes);
+db.sessionVenues = require("./sessionVenue")(sequelize, DataTypes);
 db.posts = require("./post")(sequelize, DataTypes);
+db.availabilities = require("./availability")(sequelize, DataTypes);
 db.communityMemberships = require("./communityMembership")(
   sequelize,
   DataTypes
 );
+db.availabilities.hasOne(db.sessionBookings, {
+  as: "sessionBooking",
+  foreignKey: "availabilityId",
+});
+db.sessionBookings.belongsTo(db.availabilities, {
+  as: "availability",
+  foreignKey: "availabilityId",
+});
 
+db.packageSessions.hasMany(db.availabilities, {
+  as: "availability",
+  foreignKey: "packageSessionId",
+});
 db.sequelize
   .sync({ force: false })
   .then(() => console.log(`Database synced`))
   .catch((err) => console.log(err));
 
+db.packageSessions.hasMany(db.sessionBookings, {
+  as: "sessionBooking",
+  foreignKey: "packageSessionId",
+});
+db.sessionBookings.belongsTo(db.packageSessions, {
+  as: "packageSession",
+  foreignKey: "packageSessionId",
+});
+db.hosts.hasMany(db.invites, { as: "invites", foreignKey: "hostId" });
+db.hosts.hasMany(db.sessionBookings, {
+  as: "sessionBooking",
+  foreignKey: "hostId",
+});
+
+db.sessionBookings.belongsTo(db.hosts, {
+  as: "host",
+  foreignKey: "hostId",
+});
+db.customers.hasMany(db.sessionBookings, {
+  as: "sessionBooking",
+  foreignKey: "customerId",
+});
+db.sessionBookings.belongsTo(db.customers, {
+  as: "customer",
+  foreignKey: "customerId",
+});
+
+db.hosts.hasMany(db.availabilities, {
+  as: "availability",
+  foreignKey: "hostId",
+});
+db.availabilities.belongsTo(db.hosts, {
+  as: "host",
+  foreignKey: "hostId",
+});
+
+db.hosts.hasMany(db.sessionVenues, {
+  as: "sessionVenue",
+  foreignKey: "hostId",
+});
+db.hosts.hasMany(db.DST, { as: "DST", foreignKey: "hostId" });
+db.hosts.hasMany(db.commissions, { as: "commission", foreignKey: "hostId" });
+db.customers.hasMany(db.commissions, {
+  as: "commission",
+  foreignKey: "customerId",
+});
+db.hosts.hasMany(db.withdrawals, { as: "withdrawal", foreignKey: "hostId" });
+db.venues.hasMany(db.experiences, { as: "experience", foreignKey: "venueId" });
 db.customers.hasMany(db.posts, { as: "post", foreignKey: "customerId" });
 db.communities.hasMany(db.posts, { as: "post", foreignKey: "communityId" });
 db.customers.hasMany(db.communityMemberships, {
@@ -102,6 +177,11 @@ db.communities.hasMany(db.communityMemberships, {
 });
 db.hosts.hasMany(db.communityMemberships, {
   as: "communityMembership",
+  foreignKey: "hostId",
+});
+
+db.hosts.hasMany(db.monthlySubsRecord, {
+  as: "monthlySubsRecord",
   foreignKey: "hostId",
 });
 db.hosts.hasOne(db.communities, { as: "post", foreignKey: "hostId" });
@@ -134,9 +214,14 @@ db.hosts.hasMany(db.venues, {
   foreignKey: "hostId",
   as: "venue",
 });
+
 db.venues.belongsTo(db.hosts, { foreignKey: "hostId", as: "host" });
 
 db.hosts.hasOne(db.wallets, { foreignKey: "hostId", as: "wallet" });
+db.sessionVenues.hasMany(db.packageSessions, {
+  foreignKey: "sessionVenueId",
+  as: "sessionVenue",
+});
 db.wallets.belongsTo(db.hosts, { foreignKey: "hostId", as: "host" });
 
 db.hosts.hasMany(db.workshops, {
@@ -176,6 +261,16 @@ db.classSessions.hasMany(db.ratings, {
 db.ratings.belongsTo(db.classSessions, {
   foreignKey: "classSessionId",
   as: "classSession",
+});
+
+db.hosts.hasMany(db.ratings, {
+  foreignKey: "hostId",
+  as: "ratings",
+});
+
+db.customers.hasMany(db.ratings, {
+  foreignKey: "customerId",
+  as: "rating",
 });
 
 db.experiences.hasMany(db.ratings, {
@@ -269,6 +364,11 @@ db.workshopTickets.belongsTo(db.guests, {
 db.guests.hasMany(db.classTickets, {
   as: "classTicket",
   foreignKey: "guestId",
+});
+
+db.customers.hasMany(db.waitlists, {
+  as: "waitlist",
+  foreignKey: "customerId",
 });
 db.classTickets.belongsTo(db.guests, {
   as: "guest",
@@ -389,76 +489,6 @@ db.subCategories.belongsTo(db.categories, {
   foreignKey: "categoryId",
 });
 
-db.classSessions.hasMany(db.subCategories, {
-  as: "subCategory",
-  foreignKey: "classSessionId",
-});
-db.subCategories.belongsTo(db.classSessions, {
-  as: "classSession-subCategory",
-  foreignKey: "classSessionId",
-});
-
-db.experiences.hasMany(db.subCategories, {
-  as: "subCategory",
-  foreignKey: "experienceId",
-});
-db.subCategories.belongsTo(db.experiences, {
-  as: "experience",
-  foreignKey: "experienceId",
-});
-
-db.classSessions.hasMany(db.categories, {
-  as: "category",
-  foreignKey: "classSessionId",
-});
-db.categories.belongsTo(db.classSessions, {
-  as: "classSession-categories",
-  foreignKey: "classSessionId",
-});
-
-db.experiences.hasMany(db.categories, {
-  as: "category",
-  foreignKey: "experienceId",
-});
-db.categories.belongsTo(db.experiences, {
-  as: "experience",
-  foreignKey: "experienceId",
-});
-
-db.workshops.hasMany(db.subCategories, {
-  as: "subCategory",
-  foreignKey: "workshopId",
-});
-db.subCategories.belongsTo(db.workshops, {
-  as: "classSession",
-  foreignKey: "workshopId",
-});
-
-db.workshops.hasMany(db.categories, {
-  as: "category",
-  foreignKey: "workshopId",
-});
-db.categories.belongsTo(db.workshops, {
-  as: "classSession",
-  foreignKey: "workshopId",
-});
-db.packageClasses.hasMany(db.subCategories, {
-  as: "subCategory",
-  foreignKey: "packageClassId",
-});
-db.subCategories.belongsTo(db.packageClasses, {
-  as: "packageClass",
-  foreignKey: "packageClassId",
-});
-
-db.packageClasses.hasMany(db.categories, {
-  as: "category",
-  foreignKey: "packageClassId",
-});
-db.categories.belongsTo(db.packageClasses, {
-  as: "packageClass",
-  foreignKey: "packageClassId",
-});
 db.customers.hasMany(db.wishlists, {
   as: "wishlist",
   foreignKey: "customerId",
@@ -653,7 +683,7 @@ db.comments.belongsTo(db.customers, {
   foreignKey: "customerId",
 });
 db.hosts.hasMany(db.staffs, { as: "staff", foreignKey: "hostId" });
-db.staffs.belongsTo(db.hosts, { as: "host", foreignKey: "hostId" });
+db.staffs.belongsToMany(db.hosts, { through: "invite" });
 
 db.hosts.hasMany(db.classTemplates, {
   as: "classTemplate",
@@ -895,4 +925,23 @@ db.packageClasses.hasMany(db.rooms, {
   as: "room",
   foreignKey: "packageClassId",
 });
+
+db.hosts.hasMany(db.freeClassSessions, {
+  as: "freeClassSession",
+  foreignKey: "hostId",
+});
+db.hosts.hasMany(db.freeExperiences, {
+  as: "freeExperience",
+  foreignKey: "hostId",
+});
+db.hosts.hasMany(db.freePackageClasses, {
+  as: "freePackageClass",
+  foreignKey: "hostId",
+});
+
+db.hosts.hasMany(db.freeworkshops, {
+  as: "freeworkshop",
+  foreignKey: "hostId",
+});
+
 module.exports = db;

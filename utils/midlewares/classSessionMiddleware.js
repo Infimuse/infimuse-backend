@@ -6,11 +6,11 @@ const jwt = require("jsonwebtoken");
 
 const getClassLimitForPlan = (hostPlan) => {
   switch (hostPlan) {
-    case "FreePlan":
+    case "freePlan":
       return 50;
-    case "Growth":
+    case "growth":
       return 200;
-    case "Professional":
+    case "professional":
       return 2000;
 
     default:
@@ -41,15 +41,53 @@ module.exports = roleRestrict = async (req, res, next) => {
     if (!plan) {
       return res.status(404).json({ msg: "Please subscribe to a plan" });
     }
+    if (plan.period === "annual") {
+      const now = new Date();
+      const formattedDate = now.toISOString().split("T")[0];
 
-    const classLimit = getClassLimitForPlan(plan.subscription);
+      if (plan.expiresAt <= now) {
+        return res.status(400).json({
+          error: "Your plan has expired please update/renew your plan",
+        });
+      }
+      const classLimit = getClassLimitForPlan(plan.subscription);
+      const newLimit = classLimit * 12;
 
-    const currentClassCount = await ClassSession.count({ where: { hostId } });
-
-    if (currentClassCount > classLimit) {
-      return res.status(403).json({
-        Msg: "You have reached your maximum number of listing based on your subscription",
+      const currentClassCount = await ClassSession.count({
+        where: { hostId, status: "UPCOMING" },
       });
+
+      if (currentClassCount > newLimit) {
+        return res.status(403).json({
+          Msg: "You have reached your maximum number of classes based on your subscription,please upgrade to create more venues",
+          currentSubscription: plan.subscription,
+          totalListedPackages: currentClassCount,
+          allowedVenues: `less than ${currentClassCount}`,
+        });
+      }
+    } else if (plan.period === "month") {
+      const now = new Date();
+      const formattedDate = now.toISOString().split("T")[0];
+
+      if (plan.expiresAt <= now) {
+        return res.status(400).json({
+          error: "Your plan has expired please update/renew your plan",
+        });
+      }
+      const classLimit = getClassLimitForPlan(plan.subscription);
+
+      const currentClassCount = await ClassSession.count({
+        where: { hostId, status: "UPCOMING" },
+      });
+
+      if (currentClassCount > classLimit) {
+        return res.status(403).json({
+          Msg: "You have reached your maximum number of classes based on your subscription,please upgrade to create more venues",
+          currentSubscription: plan.subscription,
+          totalListedPackages: currentClassCount,
+          allowedVenues: `less than ${currentClassCount}`,
+        });
+      }
     }
 
     next();

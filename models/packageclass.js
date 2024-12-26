@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
       capacity: DataTypes.INTEGER,
       price: DataTypes.DOUBLE,
       capacityStatus: DataTypes.BOOLEAN,
-      fullCapacity: DataTypes.INTEGER,
+      fullCapacity: { type: DataTypes.BOOLEAN, defaultValue: false },
       ageGroup: DataTypes.STRING,
       ageMin: DataTypes.INTEGER,
       ageMax: DataTypes.INTEGER,
@@ -34,6 +34,8 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DOUBLE,
       },
       channelLink: DataTypes.STRING,
+      boughtTickets: DataTypes.INTEGER,
+      listingWorth: DataTypes.INTEGER,
     },
     {
       hooks: {

@@ -1,0 +1,104 @@
+doctype html
+html
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Invoice
+    style.
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      .invoice-container {
+        width: 80%;
+        margin: auto;
+        padding: 20px;
+        background-color: #fff;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .invoice-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .invoice-header img {
+        max-width: 150px;
+      }
+      .invoice-title {
+        font-size: 2em;
+        text-align: center;
+        margin: 20px 0;
+      }
+      .invoice-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      .invoice-table th,
+      .invoice-table td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+      }
+      .invoice-table th {
+        background-color: #f2f2f2;
+      }
+      .greeting {
+        margin: 20px 0;
+        font-size: 1.2em;
+      }
+  body
+    .invoice-container
+      .invoice-header
+        img(src="https://www.infimuse.com/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FInfiMuse%20G%26T.125e1eb9.png&w=96&q=75" alt="Company Logo")
+      h4.invoice-title invoice
+      p.greeting
+        td Dear #{firstName},
+      p.greeting
+        td Thank you for choosing our plan. We are excited to have you on board.
+      table.invoice-table
+        tr
+          th Details
+          th Description
+        tr
+          td subscription
+          td pay as you go
+        tr
+          td Monthly Fee
+          td None
+        tr
+          td Booking Fee
+          td 8% per transaction
+        tr
+          td Withdrawal
+          td Ksh 100 per withdrawal
+        tr
+          td Sessions/Workshops
+          td 75 day sessions/10 workshops per month
+        tr
+          td Tools
+          td
+            ul
+              li Personal Web Page to attract your customers
+              li Accept mobile / card payments
+              li Mobile App to easily manage Sessions, Bookings, Payments, Schedule and Attendees
+              li Basic Insights Report
+        tr
+          td Communication
+          td Private Communication Channel for each listing
+        tr
+          td Posters
+          td Unlimited Self-Personalized Posters
+        tr
+          td Marketing
+          td Signup posts highlighting your offerings
+        tr
+          td Community
+          td Reach out to the Vibrant Infimuse Community
+p.greeting
+td Incase of anything reach out to us,we'll be happy to help 
+td Thankyou

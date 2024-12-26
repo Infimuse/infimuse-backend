@@ -40,7 +40,7 @@ exports.customerSignup = async (req, res, next) => {
     const role = req.body.role;
     const password = req.body.password;
     const resetPassword = req.body.resetPassword;
-
+    const phone = req.body.phone;
     const existingHost = await Customer.findOne({ where: { email } });
 
     if (existingHost) {
@@ -55,6 +55,7 @@ exports.customerSignup = async (req, res, next) => {
       role,
       password,
       resetPassword,
+      phone,
     });
     const url = newUser.OTP;
     await new Email(
@@ -80,7 +81,6 @@ exports.customerSignup = async (req, res, next) => {
     );
 
     const adminToken = adminLoginResponse.headers.token;
-    console.log("Admin token received:", adminToken);
 
     const userCreationResponse = await axios.post(
       `${mattermostUrl}/users`,
@@ -147,7 +147,14 @@ exports.customerLogin = async (req, res, next) => {
     }
 
     const token = signToken(user.id);
-    return res.status(200).json({ msg: "Success", token });
+    return res.status(200).json({
+      msg: "Success",
+      token,
+      // user,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+    });
   } catch (error) {
     return res.status(500).json({ Error: "Internal server error" });
   }

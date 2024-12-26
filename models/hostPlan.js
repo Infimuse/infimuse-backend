@@ -6,6 +6,8 @@ module.exports = (sequelize, DataTypes) => {
     amount: DataTypes.INTEGER,
     paymentReference: DataTypes.STRING,
     email: DataTypes.STRING,
+    period: DataTypes.STRING,
+    expiresAt: DataTypes.DATE,
   });
   return HostPlan;
 };

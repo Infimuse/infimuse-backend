@@ -4,7 +4,7 @@ const hostReview = db.hostReviews;
 const Host = db.hosts;
 
 // exports.createHost = factory.createDoc(Host);
-exports.getAllHost = factory.getAllDocs(Host);
+exports.getAllHost = factory.getAllHosts(Host);
 exports.updateHost = factory.updateDoc(Host);
 exports.deleteHost = factory.deleteDoc(Host);
 

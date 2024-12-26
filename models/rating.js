@@ -5,6 +5,7 @@ module.exports = (sequelize, Datatypes) => {
       allowNull: false,
     },
     totalRating: Datatypes.DOUBLE,
+    message: Datatypes.TEXT,
   });
   return Rating;
 };

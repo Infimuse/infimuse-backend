@@ -9,6 +9,7 @@ const secretKey = process.env.JWT_SECRET;
 const Email = require("../utils/email");
 const Host = db.hosts;
 const Wallet = db.wallets;
+const HostPlan = db.hostPlans;
 const reference = crypto.randomBytes(3).toString("hex").toUpperCase();
 
 exports.withdraw = async (req, res) => {
@@ -32,16 +33,32 @@ exports.withdraw = async (req, res) => {
     if (!availableWallet) {
       return res.status(404).json({ error: "Please activate your wallet" });
     }
+    let withdrawFee;
+    const plan = await HostPlan.findOne({ where: { hostId } });
 
-    if (amount > availableWallet.walletAmount) {
-      return res.status(403).json({ error: "Insufficient balance" });
+    if (plan.subscription === "freePlan") {
+      withdrawFee = 100;
+    } else if (plan.subscription === "growth") {
+      withdrawFee = 100;
+    } else if (plan.subscription === "professional") {
+      withdrawFee = 100;
+    }
+
+    const totalAmount = availableWallet.walletAmount - withdrawFee;
+    if (amount > totalAmount) {
+      return res.status(403).json({
+        error: "Insufficient balance",
+        availableBalance: availableWallet.walletAmount,
+        withdrawFee,
+        withdrawableAmount: availableWallet.walletAmount - withdrawFee, // Corrected here to use withdrawFee
+      });
     }
 
     const recipient = await TransferRecipient.findOne({ where: { hostId } });
     if (!recipient) {
       return res
         .status(404)
-        .json({ error: "The host is not in the transfer recipient" });
+        .json({ error: "The host is not in the transfer recipient list" });
     }
 
     const params = JSON.stringify({
@@ -73,6 +90,8 @@ exports.withdraw = async (req, res) => {
         try {
           const parsedData = JSON.parse(data);
           if (!parsedData.status) {
+            console.log(parsedData);
+
             return res.status(403).json({ error: parsedData.message });
           }
 

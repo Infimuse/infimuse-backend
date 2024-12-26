@@ -155,4 +155,19 @@ module.exports = class Email {
   async withdraw() {
     await this.send("withdraw", "Your infimuse withdraw code");
   }
+  async freePlanTicket() {
+    await this.send("payAsYouGoPlan", "Subscription Confirmed!");
+  }
+  async growthPlanTicket() {
+    await this.send("growthPlan", "Subscription Confirmed!");
+  }
+  async professionalPlanTicket() {
+    await this.send("professionalPlan", "Subscription Confirmed!");
+  }
+  async assignedListing() {
+    await this.send("assignedTemplate", "New Template assigned");
+  }
+  async adminToken() {
+    await this.send("adminToken", "Admin login Token");
+  }
 };

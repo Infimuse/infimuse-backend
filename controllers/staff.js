@@ -2,10 +2,12 @@ const jwt = require("jsonwebtoken");
 const db = require("../models");
 const factory = require("./factory");
 const bcrypt = require("bcryptjs");
-const { Op } = require("sequelize");
+const { Op, where } = require("sequelize");
 const Email = require("../utils/email");
-const Staff = db.staffs;
 const compare = require("secure-compare");
+const Staff = db.staffs;
+const Host = db.hosts;
+const Invites = db.invites;
 
 exports.getAllStaffs = factory.getAllDocs(Staff);
 exports.updateStaff = factory.updateDoc(Staff);
@@ -56,7 +58,6 @@ exports.staffSignup = async (req, res, next) => {
       workingDays: req.body.workingDays,
       avgSessionRating: req.body.avgSessionRating,
       phone: req.body.phone,
-      hostIdentifier: req.body.hostIdentifier,
     });
 
     const token = signToken(newStaff.id);
@@ -67,55 +68,75 @@ exports.staffSignup = async (req, res, next) => {
       .json({ msg: "Staff created successfully", token, newStaff });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
   next();
 };
 
 exports.staffLogin = async (req, res, next) => {
   try {
-    const { password } = req.body;
-    const { email } = req.body;
-    const { OTP } = req.body;
+    const { email, password, OTP } = req.body;
 
     if (!email || !password) {
-      return next(Error("Email and password are required"));
-    }
-    const user = await Staff.findOne({ where: { email } });
-    if (!user) {
-      return next(Error("User not found"));
+      return res.status(403).json({ error: "Email/password are required" });
     }
 
-    if (user.firstTimeLogin === true) {
+    const user = await Staff.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.firstTimeLogin) {
       if (!OTP) {
-        return next(Error("OTP required for firstTime login"));
+        return res
+          .status(403)
+          .json({ error: "OTP required for first-time login" });
       }
 
       await compareOTP(OTP, user.OTP);
 
       const isPasswordValid = await comparePasswords(password, user.password);
-
       if (!isPasswordValid) {
-        return next(Error("Invalid password/Email"));
+        return res.status(401).json({ error: "Invalid email/password" });
       }
 
       await user.update({ firstTimeLogin: false });
       const token = signToken(user.id);
 
-      res.status(200).json({ msg: "success", token });
+      return res.status(200).json({ msg: "Success", token });
     }
 
     const isPasswordValid = await comparePasswords(password, user.password);
     if (!isPasswordValid) {
-      return next(Error("Incorrect password/username"));
+      return res.status(403).json({ error: "Incorrect email/password" });
     }
 
     const token = signToken(user.id);
-    res.status(200).json({ msg: "Success", token });
+
+    // Fetch invites for the staff
+    const invites = await Invites.findAll({
+      where: { email: user.email, accepted: true },
+      attributes: ["hostId"],
+    });
+
+    if (invites.length === 0) {
+      return res.status(200).json({ msg: "No host found", token });
+    }
+
+    // Extract host IDs from invites
+    const hostIds = invites.map((invite) => invite.hostId);
+
+    // Fetch host details
+    const hosts = await Host.findAll({
+      where: { id: hostIds },
+      attributes: ["id", "firstName", "email"],
+    });
+
+    return res.status(200).json({ msg: "Success", token, hosts });
   } catch (error) {
-    res.status(500).json({ errror: "inter server error" });
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
-  next();
 };
 
 exports.forgotPassword = async (req, res, next) => {
@@ -123,7 +144,7 @@ exports.forgotPassword = async (req, res, next) => {
 
   const staff = await Staff.findOne({ where: { email } });
   if (!staff) {
-    return next(Error("No user with that email"));
+    return res.status(404).json({ error: "No user with that email" });
   }
   try {
     await staff.save();
@@ -131,10 +152,11 @@ exports.forgotPassword = async (req, res, next) => {
 
     new Email(staff, url).resetPassword();
 
-    res.status(200).json({ message: "Please check your email token sent" });
+    return res
+      .status(200)
+      .json({ message: "Please check your email token sent" });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -160,9 +182,10 @@ exports.resetPassword = async (req, res, next) => {
     await user.save();
     const newToken = signToken(user.id);
 
-    res.status(200).json({ msg: "Password reset successful", token: newToken });
+    return res
+      .status(200)
+      .json({ msg: "Password reset successful", token: newToken });
   } catch (error) {
-    console.error("Error resetting password:", error);
     return next(Error("There was an error resetting the password"));
   }
 };

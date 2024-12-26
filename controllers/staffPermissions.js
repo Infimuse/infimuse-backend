@@ -4,9 +4,13 @@ const Host = db.hosts;
 const Staff = db.staffs;
 const Workshop = db.workshops;
 const PackageClass = db.packageClasses;
+const PackageSession = db.packageSessions;
 const ClassSession = db.classSessions;
 const jwt = require("jsonwebtoken");
 const staff = require("../models/staff");
+const AcceptInvite = db.acceptInvites;
+const WorkshopClass = db.workshopClasses;
+const Experience = db.experiences;
 
 // so where the template == true then the staff can create
 
@@ -31,203 +35,209 @@ exports.checkStaffListings = async (req, res, next) => {
 };
 
 exports.checkStaffPermissionAndCreateWorkshop = async (req, res, next) => {
-  const token =
-    req.headers.authorization && req.headers.authorization.split(" ")[1];
-  if (!token) {
-    return next(Error("Please login"));
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, async (err, staff) => {
-    if (err) {
-      return next(Error("invalid token"));
+  // http://localhost/8080/api/v1/staffs/workshops/:packageClassId
+  try {
+    const workshopId = req.params.workshopId;
+    const token =
+      req.headers.authorization && req.headers.authorization.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Please login" });
     }
-    // http://localhost/8080/api/v1/staffs/workshops/:workshopId
-    const { workshopId } = req.params;
-    const newstaff = await Staff.findOne({ where: { id: staff.id } });
-    if (!newstaff) {
-      return res.status(404).json({ error: " User not found" });
-    }
-    const staffId = newstaff.id;
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const staffId = decodedToken.id;
 
-    const Permission = await StaffPermission.findAll({
+    const workshop = await Workshop.findOne({ where: { id: workshopId } });
+    if (!workshop) {
+      return res.status(404).json({ error: "not found" });
+    }
+    const hostId = workshop.hostId;
+    const permission = await AcceptInvite.findOne({
       where: { staffId, workshopId },
     });
-
-    if (Permission.length === 0) {
+    if (!permission) {
       return res
         .status(403)
-        .json({ msg: "You do not have any permision for that workshop" });
+        .json({ error: "This template has not been assigned to you" });
     }
-
-    const existingWorkshop = await Workshop.findOne({
-      where: { id: workshopId },
+    const workshopClass = await WorkshopClass.create({
+      title: req.body.title,
+      description: req.body.description,
+      date: req.body.date,
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
+      status: req.body.status,
+      attendance: req.body.attendance,
+      lastScannedAt: req.body.lastScannedAt,
+      workshopId,
+      hostId,
     });
-    if (existingWorkshop.templateStatus) {
-      const newWorkshop = Workshop.build({
-        title: existingWorkshop.title,
-        description: existingWorkshop.description,
-        ageGroup: existingWorkshop.ageGroup,
-        ageMax: existingWorkshop.ageMax,
-        ageMin: existingWorkshop.ageMin,
-        duration: existingWorkshop.duration,
-        capacity: existingWorkshop.capacity,
-        fullCapacity: existingWorkshop.fullCapacity,
-        capacityStatus: existingWorkshop.capacityStatus,
-        price: existingWorkshop.price,
-        templateStatus: existingWorkshop.templateStatus,
-        hostId: existingWorkshop.hostId,
-
-        // what to change
-        posterUrl: req.body.posterUrl,
-        price: req.body.price,
-        startDate: req.body.startDate,
-        endDate: req.body.endDate,
-      });
-
-      await newWorkshop.save();
-      res.status(200).json({ msg: "success", newWorkshop });
-    }
-
-    return next(Error("It is not a template"));
-
-    // res.status(200).json({ Msg: "success", workshops });
-  });
+    return res.status(201).json({ msg: "success", workshopClass });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 };
 
 exports.checkStaffPermissionAndCreatePackage = async (req, res, next) => {
-  const token =
-    req.headers.authorization && req.headers.authorization.split(" ")[1];
-
-  if (!token) {
-    return next(Error("Pleae login"));
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, async (err, staff) => {
-    if (err) {
-      return next(Error("invalid token "));
+  // http://localhost/8080/api/v1/staffs/workshops/:workshopId
+  try {
+    const packageClassId = req.params.packageClassId;
+    const token =
+      req.headers.authorization && req.headers.authorization.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Please login" });
     }
-    const newstaff = await Staff.findOne({ where: { id: staff.id } });
-    if (!newstaff) {
-      return res.status(404).json({ error: "User not found" });
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const staffId = decodedToken.id;
+
+    const packageClass = await PackageClass.findOne({
+      where: { id: packageClassId },
+    });
+    if (!packageClass) {
+      return res.status(404).json({ error: "not found" });
     }
-    const staffId = newstaff.id;
-
-    const { packageClassId } = req.params;
-    try {
-      const permissions = await StaffPermission.findOne({
-        where: { staffId, packageClassId },
-      });
-      if (!permissions) {
-        return res
-          .status(403)
-          .json({ error: "You do not have the permission to that package" });
-      }
-
-      const existingPackage = await PackageClass.findOne({
-        where: { id: packageClassId },
-      });
-
-      if (existingPackage.templateStatus === true) {
-        const newPackageClass = PackageClass.build({
-          title: existingPackage.title,
-          description: existingPackage.description,
-          ageGroup: existingPackage.ageGroup,
-          ageMax: existingPackage.ageMax,
-          ageMin: existingPackage.ageMin,
-          duration: existingPackage.duration,
-          capacity: existingPackage.capacity,
-          fullCapacity: existingPackage.fullCapacity,
-          capacityStatus: existingPackage.capacityStatus,
-          price: existingPackage.price,
-          templateStatus: existingPackage.templateStatus,
-          hostId: existingPackage.hostId,
-
-          // what to change
-          posterUrl: req.body.posterUrl,
-          price: req.body.price,
-          startDate: req.body.startDate,
-          endDate: req.body.endDate,
-        });
-        await newPackageClass.save();
-
-        return res.status(200).json({ msg: "Success" });
-      }
+    const hostId = packageClass.hostId;
+    const permission = await AcceptInvite.findOne({
+      where: { staffId, packageClassId },
+    });
+    if (!permission) {
       return res
-        .status(404)
-        .json({ error: "The package class is not a template" });
-    } catch (error) {
-      return res.status(500).json({ error: "Internal server error" });
+        .status(403)
+        .json({ error: "This template has not been assigned to you" });
     }
-  });
+    const packageSession = await PackageSession.create({
+      title: req.body.title,
+      description: req.body.description,
+      date: req.body.date,
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
+      status: req.body.status,
+      attendance: req.body.attendance,
+      lastScannedAt: req.body.lastScannedAt,
+      packageClassId,
+      hostId,
+    });
+    return res.status(201).json({ msg: "success", packageSession });
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error" });
+  }
 };
 
-exports.checkStaffPermissionAndCreateClassSession = async (req, res, next) => {
-  const token =
-    req.headers.authorization && req.headers.authorization.split(" ")[1];
+exports.checkStaffPermissionAndCreateClassSession = async (req, res) => {
+  try {
+    const classSessionId = req.params.classSessionId;
+    const token =
+      req.headers.authorization && req.headers.authorization.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Please login" });
+    }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const staffId = decodedToken.id;
 
-  if (!token) {
-    return res.status(403).json({ error: "Please login" });
+    const classSession = await ClassSession.findOne({
+      where: { id: classSessionId },
+    });
+    if (!classSession) {
+      return res.status(404).json({ error: "not found" });
+    }
+    const hostId = classSession.hostId;
+    const permission = await AcceptInvite.findOne({
+      where: { staffId, classSessionId },
+    });
+    if (!permission) {
+      return res
+        .status(403)
+        .json({ error: "This template has not been assigned to you" });
+    }
+    const classSessions = await ClassSession.create({
+      title: req.body.title,
+      description: req.body.description,
+      date: req.body.date,
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
+      status: req.body.status,
+      attendance: req.body.attendance,
+      lastScannedAt: req.body.lastScannedAt,
+      classCategory: req.body.classCategory,
+      templateStatus: false,
+      classSessionId,
+      hostId,
+    });
+    return res.status(201).json({ msg: "success", classSessions });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
+};
 
-  jwt.verify(token, process.env.JWT_SECRET, async (err, staff) => {
-    if (err) {
-      return res.status(404).json({ error: "invalid token" });
+exports.checkStaffPermissionAndCreateExperience = async (req, res) => {
+  try {
+    const title = req.body.title;
+    const description = req.body.description;
+    const posterUrl = req.body.posterUrl;
+    const capacity = req.body.capacity;
+    const fullCapacity = req.body.fullCapacity;
+    const startDate = req.body.startDate;
+    const endDate = req.body.endDate;
+    const startTime = req.body.startTime;
+    const endTime = req.body.endTime;
+    const date = req.body.date;
+    const price = req.body.price;
+    const capacityStatus = req.body.capacityStatus;
+    const ageGroup = req.body.ageGroup;
+    const ageMin = req.body.ageMin;
+    const ageMax = req.body.ageMax;
+    const templateStatus = req.body.templateStatus;
+    const venueId = req.body.venueId;
+    const experienceCategory = req.body.experienceCategory;
+    const experienceId = req.params.experienceId;
+    const token =
+      req.headers.authorization && req.headers.authorization.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Please login" });
     }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const staffId = decodedToken.id;
 
-    const staffId = staff.id;
-    const { classSessionId } = req.params;
-
-    try {
-      const newStaff = await Staff.findOne({ where: { id: staffId } });
-      if (!newStaff) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const newStaffId = newStaff.id;
-      const permissions = await StaffPermission.findOne({
-        where: { staffId: newStaffId, classSessionId },
-      });
-
-      if (!permissions) {
-        return res.status(403).json({
-          err: "You do not have the rights to access this class Session",
-        });
-      }
-
-      const existingClassSession = await ClassSession.findOne({
-        where: { id: classSessionId },
-      });
-      if (existingClassSession.templateStatus === true) {
-        const newClassSession = ClassSession.build({
-          title: existingClassSession.title,
-          description: existingClassSession.description,
-          ageGroup: existingClassSession.ageGroup,
-          ageMax: existingClassSession.ageMax,
-          ageMin: existingClassSession.ageMin,
-          duration: existingClassSession.duration,
-          capacity: existingClassSession.capacity,
-          fullCapacity: existingClassSession.fullCapacity,
-          capacityStatus: existingClassSession.capacityStatus,
-          price: existingClassSession.price,
-          templateStatus: existingClassSession.templateStatus,
-          hostId: existingClassSession.hostId,
-
-          // what to change
-          posterUrl: req.body.posterUrl,
-          price: req.body.price,
-          date: req.body.date,
-          startDate: req.body.startDate,
-          startTime: req.body.startTime,
-          endTime: req.body.endTime,
-          endDate: req.body.endDate,
-        });
-
-        await newClassSession.save();
-      }
-      return res.status(200).json({ msg: "Success class Sesion created" });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).json({ error: "Internal server error" });
+    const experience = await Experience.findOne({
+      where: { id: experienceId },
+    });
+    if (!experience) {
+      return res.status(404).json({ error: "not found" });
     }
-  });
+    const hostId = experience.hostId;
+    const permission = await AcceptInvite.findOne({
+      where: { staffId, experienceId },
+    });
+    if (!permission) {
+      return res
+        .status(403)
+        .json({ error: "This template has not been assigned to you" });
+    }
+    const experiences = await Experience.create({
+      title: title,
+      description: description,
+      posterUrl: posterUrl,
+      capacity: capacity,
+      fullCapacity: fullCapacity,
+      startDate: startDate,
+      endDate: endDate,
+      startTime: startTime,
+      endTime: endTime,
+      date: date,
+      price: price,
+      capacityStatus: capacityStatus,
+      ageGroup: ageGroup,
+      ageMin: ageMin,
+      ageMax: ageMax,
+      templateStatus: templateStatus,
+      hostId,
+      venueId,
+      experienceCategory,
+    });
+    return res.status(201).json({ msg: "success", experiences });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 };

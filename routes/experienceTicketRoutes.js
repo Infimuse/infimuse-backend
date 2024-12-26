@@ -7,6 +7,7 @@ const hostAuthController = require("./../controllers/hostAuthController");
 router.post("/cancelticket/:ticketId", experienceTicketController.cancelTicket);
 router.get("/verify", experienceTicketController.verifyPayment);
 router.post("/scan", experienceTicketController.ticketScan);
+router.post("/free", experienceTicketController.createFreeExperienceTickets);
 router
   .route("/")
   .get(

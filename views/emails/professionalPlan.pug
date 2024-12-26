@@ -1,0 +1,119 @@
+doctype html
+html
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Invoice
+    style.
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      .invoice-container {
+        width: 80%;
+        margin: auto;
+        padding: 20px;
+        background-color: #fff;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .invoice-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .invoice-header img {
+        max-width: 150px;
+      }
+      .invoice-title {
+        font-size: 2em;
+        text-align: center;
+        margin: 20px 0;
+      }
+      .invoice-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      .invoice-table th,
+      .invoice-table td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+      }
+      .invoice-table th {
+        background-color: #f2f2f2;
+      }
+      .greeting {
+        margin: 20px 0;
+        font-size: 1.2em;
+      }
+  body
+    .invoice-container
+      .invoice-header
+        img(src="https://www.infimuse.com/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FInfiMuse%20G%26T.125e1eb9.png&w=96&q=75" alt="Company Logo")
+      h4.invoice-title Invoice
+      p.greeting
+        | Dear #{firstName},
+      p.greeting
+        | Thank you for choosing our plan. We are excited to have you on board.
+      table.invoice-table
+        tr
+          th Details
+          th Description
+        tr
+          td Subscription Plan
+          td Professional
+        tr
+          td Duration
+          td #{url}
+        tr
+          td Amount Paid
+          td #{title}
+        tr
+          td Next Billing Date
+          td #{date}
+        tr
+          td Booking Fee
+          td 3% per Transaction
+        tr
+          td Withdrawals
+          td 5 free monthly
+        tr
+          td Sessions/Workshops
+          td Unlimited
+        tr
+          td Tools
+          td
+            ul
+              li Staff Management
+              li Advanced Analytics
+              li Personal Web Page to attract your customers
+              li Accept mobile / card payments
+              li Mobile App to easily manage Sessions, Bookings, Payments, Schedule and Attendees
+        tr
+          td Communication
+          td Private Communication Channel for each of your Sessions/Workshops
+        tr
+          td Venues
+          td Add up to 8 Venues
+        tr
+          td Posters
+          td 10 Custom Posters, Unlimited self-personalized posters
+        tr
+          td Marketing
+          td
+            ul
+              li Sign up post and personalized blog/newsletter highlighting host and offerings
+              li 10 monthly listing boosts
+              li 3 monthly Personalized Direct Marketing Campaigns
+        tr
+          td Community
+          td Build a Personal Community for your attendees to exchange class photos, progress reports and informative content to inspire future learners
+      p.greeting
+        | In case of anything, reach out to us. We'll be happy to help.
+      p.greeting
+        | Thank you.

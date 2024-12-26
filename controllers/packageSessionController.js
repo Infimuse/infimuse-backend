@@ -1,5 +1,6 @@
 const factory = require("./factory");
 const db = require("./../models");
+const Availability = db.availabilities;
 
 const PackageSession = db.packageSessions;
 const PackageTicket = db.packageTickets;
@@ -7,22 +8,56 @@ const Comment = db.comments;
 const Location = db.locations;
 const Host = db.hosts;
 const PackageClass = db.packageClasses;
+const jwt = require("jsonwebtoken");
+const secretKey = process.env.JWT_SECRET;
 
-// exports.createPackageSession = factory.createDoc(PackageSession);
 exports.getAllPackageSessions = factory.getAllDocs(PackageSession);
 exports.getWithin = factory.getWithin(PackageSession);
 exports.updatePackageSession = factory.updateDoc(PackageSession);
 exports.deletePackageSession = factory.deleteDoc(PackageSession);
 
+const createAvailabilitySlots = async (
+  packageSessionId,
+  startDate,
+  endDate,
+  hostId
+) => {
+  const timeSlots = ["7Am-9Am", "10Am-12Pm", "1:00Pm-2Pm", "3Pm-5Pm"];
+  let currentDate = new Date(startDate);
+
+  while (currentDate <= endDate) {
+    for (const slot of timeSlots) {
+      await Availability.create({
+        date: currentDate,
+        slot,
+        isBooked: false,
+        packageSessionId,
+        hostId,
+      });
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+};
+
 exports.createPackageSession = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorized: Token missing" });
+  }
+
+  const decodedToken = jwt.verify(token, secretKey);
+  const hostId = decodedToken.id;
+
   try {
-    const title = req.body.title;
-    const description = req.body.description;
-    const startTime = req.body.startTime;
-    const endTime = req.body.endTime;
-    const date = req.body.date;
-    const packageClassId = req.body.packageClassId;
-    const hostId = req.body.hostId;
+    const {
+      title,
+      description,
+      startDate,
+      endDate,
+      packageClassId,
+      sessionVenueId,
+      date,
+    } = req.body;
 
     const existingPackageClass = await PackageClass.findOne({
       where: { id: packageClassId },
@@ -31,53 +66,47 @@ exports.createPackageSession = async (req, res, next) => {
       return res.status(404).json({ error: "Package Class not found" });
     }
 
-    // extracting the dates
     const packageEndDate = existingPackageClass.endDate;
-    const year1 = packageEndDate.getFullYear();
-    const month1 = packageEndDate.getMonth();
-    const day1 = packageEndDate.getDate();
-
-    // start dates
     const packageStartDate = existingPackageClass.startDate;
-    const year3 = packageStartDate.getFullYear();
-    const month3 = packageStartDate.getMonth();
-    const day3 = packageStartDate.getDate();
 
-    const datestring = new Date(date);
-    const year2 = datestring.getFullYear();
-    const month2 = datestring.getMonth();
-    const day2 = datestring.getDate();
+    const sessionStartDate = new Date(startDate);
+    const sessionEndDate = new Date(endDate);
 
-    const newPackageEndDate = new Date(year1, month1, day1);
-    const newPackageStartDate = new Date(year3, month3, day3);
-    const newDate = new Date(year2, month2, day2);
-
-    if (newDate > newPackageEndDate) {
+    if (
+      sessionStartDate < packageStartDate ||
+      sessionEndDate > packageEndDate
+    ) {
       return res.status(403).json({
         error:
-          "The Package session you are trying to refer to just ended,please check the dates",
+          "The PackageSession dates must be within the PackageClass date range.",
       });
     }
 
-    if (newDate < newPackageStartDate) {
-      return res.status(403).json({
-        error:
-          "The Package session you are refering to, the start dates do not match,please check the dates",
-      });
-    }
-    const doc = await PackageSession.create({
+    const packageSession = await PackageSession.create({
       title,
       description,
-      startTime,
-      endTime,
-      date,
+      startDate,
+      endDate,
+      startDate: sessionStartDate,
+      endDate: sessionEndDate,
       hostId,
+      date,
       packageClassId,
+      sessionVenueId,
     });
 
-    return res.status(200).json({ status: "Document created successful", doc });
+    await createAvailabilitySlots(
+      packageSession.id,
+      sessionStartDate,
+      sessionEndDate,
+      packageSession.hostId
+    );
+
+    return res
+      .status(200)
+      .json({ status: "Document created successfully", packageSession });
   } catch (err) {
-    console.log(err);
+    console.error(err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

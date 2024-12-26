@@ -4,15 +4,23 @@ const jwt = require("jsonwebtoken");
 const Email = require("../utils/email");
 const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
+const { where } = require("sequelize");
 const Customer = db.customers;
 const PaymentTransaction = db.paymentTransactions;
 const CancelTicket = db.cancelTickets;
 const Workshop = db.workshops;
+const WorkshopClass = db.workshopClasses;
 const TicketHolder = db.ticketHolders;
 const WorkshopTicket = db.workshopTickets;
 const Guest = db.guests;
 const Community = db.communities;
+const DST = db.DST;
+const HostPlan = db.hostPlans;
+const Commission = db.commissions;
 const CommunityMembership = db.communityMemberships;
+const callbackUrl = "http://localhost:8080/api/v1/workshop-tickets/verify";
+const Waitlist = db.waitlists;
+const InfimuseAccount = db.InfimuseAccount;
 
 // exports.createWorkshopTicket = factory.createDoc(WorkshopTicket);
 exports.getWorkshopTicket = factory.getOneDoc(WorkshopTicket);
@@ -107,9 +115,19 @@ exports.cancelTicket = async (req, res, next) => {
 };
 
 exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
-  const { email, callbackUrl, name, workshopId } = req.body;
+  const workshopId = req.body.workshopId;
 
   try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorised" });
+    }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const id = decodedToken.id;
+    const customer = await Customer.findOne({ where: id });
+    if (!customer) {
+      return res.status(404).json({ error: "customer not found" });
+    }
     const workshop = await Workshop.findOne({ where: { id: workshopId } });
 
     if (!workshop) {
@@ -119,11 +137,42 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
     }
 
     const hostId = workshop.hostId;
-    const amount = workshop.price;
+    const sessionAmount = workshop.price * 100;
+    const toBeTaxed = sessionAmount * 1.5;
+    const tax = Math.ceil(toBeTaxed / 100);
+    const amount = sessionAmount + tax;
+    const name = customer.firstName;
+    const email = customer.email;
+
+    const capacity = workshop.capacity;
+    const ticketsBought = workshop.boughtTickets;
+
+    if (ticketsBought === capacity) {
+      await workshop.update({ fullCapacity: true });
+      const checkWaitlist = await Waitlist.findOne({
+        where: {
+          customerId: customer.id,
+          workshopId,
+        },
+      });
+
+      if (checkWaitlist) {
+        return res.status(403).json({ error: "already in the waitlist" });
+      }
+      await Waitlist.create({
+        name,
+        email,
+        workshopId,
+        customerId: customer.id,
+      });
+      return res.status(403).json({
+        error: "Full capacity reached, we've added you to the waitlist",
+      });
+    }
 
     const paymentDetails = {
       amount,
-      email,
+      email: customer.email,
       callback_url: callbackUrl,
       metadata: { amount, email, name },
     };
@@ -131,7 +180,7 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
     const data = await paystackApi.initializePayment(paymentDetails);
     const docHolder = await db.ticketHolders.create({
       workshopId,
-      customerId: req.body.customerId,
+      customerId: id,
       reference: data.reference,
       hostId,
     });
@@ -164,10 +213,11 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
   if (transactionStatus !== "success") {
     throw new Error(`Transaction: ${transactionStatus}`);
   }
+  const actualAmount = amount / 100;
 
   const [payment, created] = await WorkshopTicket.findOrCreate({
     where: { paymentReference },
-    defaults: { amount, email, name, paymentReference },
+    defaults: { amount: actualAmount, email, name, paymentReference },
   });
 
   if (!created) {
@@ -226,17 +276,86 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     null,
     channelLink
   ).workshopTicket();
+  await InfimuseAccount.create({
+    amount: amount / 100,
+    reference,
+    transactionType: "Booking",
+  });
 
   const hostId = availableWorkshop.hostId;
+  const tickets = availableWorkshop.boughtTickets + 1;
+  await availableWorkshop.update({ boughtTickets: tickets });
+  await findTicket.destroy();
+  await availableWorkshop.update({
+    listingWorth: availableWorkshop.price * tickets,
+  });
 
   const communities = await Community.findOne({
     where: { hostId },
   });
 
-  if (!communities) {
-    return res
-      .status(404)
-      .json({ error: "The host has not created a community yet" });
+  const toBeTaxed = actualAmount * 1.5;
+  const tax = toBeTaxed / 100;
+  const date = Date.now();
+  await DST.create({
+    hostId,
+    amount: tax,
+    date,
+  });
+
+  const ticketAmount = actualAmount - tax;
+
+  const hostPlan = await HostPlan.findOne({
+    where: { hostId },
+  });
+  let commissionPercentage;
+  if (hostPlan.subscription === "freePlan") {
+    commissionPercentage = 8;
+    const commission = (commissionPercentage * ticketAmount) / 100;
+    await ticket.update({ amount: ticketAmount - commission });
+    const vat = 0.16 * commission;
+    await Commission.create({
+      amount: commission,
+      reference: ticket.paymentReference,
+      comissionType: "bookingFee",
+      customerId: customer.id,
+      hostId: hostId,
+      VAT: vat,
+    });
+  } else if (hostPlan.subscription === "growth") {
+    commissionPercentage = 5;
+    const commission = (commissionPercentage * ticketAmount) / 100;
+    await ticket.update({ amount: ticketAmount - commission });
+    const vat = 0.16 * commission;
+    await Commission.create({
+      amount: commission,
+      reference: ticket.paymentReference,
+      comissionType: "bookingFee",
+      customerId: customer.id,
+      hostId: hostId,
+      VAT: vat,
+    });
+  } else if (hostPlan.subscription === "professional") {
+    commissionPercentage = 2.9;
+    const commission = (commissionPercentage * ticketAmount) / 100;
+    await ticket.update({ amount: ticketAmount - commission });
+    const vat = 0.16 * commission;
+    await Commission.create({
+      amount: commission,
+      reference: ticket.paymentReference,
+      comissionType: "bookingFee",
+      customerId: customer.id,
+      hostId: hostId,
+      VAT: vat,
+    });
+  }
+
+  https: if (!communities) {
+    return res.status(404).json({
+      error:
+        "Ticket sent to your email but the host has not created a community yet we'll notify you when they do",
+      data: payment,
+    });
   }
   const existingMembership = await CommunityMembership.findOne({
     where: {
@@ -251,7 +370,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       customerId: findTicket.customerId,
     });
   }
-  await findTicket.destroy();
+
   return res.status(200).json({
     message: "Payment verified",
     data: payment,
@@ -259,11 +378,21 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
 });
 
 exports.ticketScan = async (req, res) => {
+  // /workshop-class/:workshopClassId/scan/
   const qrcode = req.body.qrcode;
+  const workshopClassId = req.params.workshopClassId;
+
+  const workshopClass = await WorkshopClass.findOne({
+    where: { id: workshopClassId },
+  });
+  if (!workshopClass) {
+    return res
+      .status(404)
+      .json({ error: "There is no workshopClass with that id" });
+  }
   if (!qrcode) {
     return res.status(404).json({ error: "There is no qrcode to be scanned" });
   }
-
   const ticketId = await WorkshopTicket.findOne({
     where: { ticketId: qrcode },
   });
@@ -273,19 +402,39 @@ exports.ticketScan = async (req, res) => {
   if (ticketId.ticketStatus != "ACTIVE") {
     return res.status(403).json({ error: "ticket status is not active" });
   }
-  const model = await Workshop.findOne({
+
+  const now = new Date();
+  const tenHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+  if (
+    workshopClass.lastScannedAt &&
+    workshopClass.lastScannedAt > tenHoursAgo
+  ) {
+    return res.status(403).json({
+      error:
+        "This ticket has already been scanned for this session, can't scan twice",
+      lastScannedAt: workshopClass.lastScannedAt,
+    });
+  }
+  await workshopClass.update({
+    lastScannedAt: now,
+  });
+
+  const workshop = await Workshop.findOne({
     where: { id: ticketId.workshopId },
   });
-  if (!model) {
-    return res.status(404).json({ error: "model not found" });
+  if (!workshop) {
+    return res.status(404).json({ error: "workshop not found" });
   }
-  await model.update({
-    attendance: model.attendance + 1,
-  });
+
   if (ticketId.customerId) {
     const customerId = ticketId.customerId;
     const customer = await Customer.findOne({ where: { id: customerId } });
-
+    if (!customer) {
+      return res.status({ error: "Ticket found but not a customer" });
+    }
+    await workshopClass.update({
+      attendance: workshopClass.attendance + 1,
+    });
     return res.status(200).json({
       customer: {
         firstName: customer.firstName,
@@ -293,11 +442,11 @@ exports.ticketScan = async (req, res) => {
         email: customer.email,
         ticketStatus: ticketId.status,
         amount: ticketId.amount,
-        workshopTitle: model.title,
-        workshopDescription: model.description,
-        workshopStart: model.startDate,
-        workshopDate: model.endDate,
-        workshopStatus: model.status,
+        workshopTitle: workshop.title,
+        workshopDescription: workshop.description,
+        workshopStart: workshop.startDate,
+        workshopDate: workshop.endDate,
+        workshopStatus: workshop.status,
       },
     });
   }
@@ -307,8 +456,8 @@ exports.ticketScan = async (req, res) => {
       .status(404)
       .json({ error: "ticket found but not as a guest or a customer" });
   }
-  await model.update({
-    attendance: model.attendance + 1,
+  await workshop.update({
+    attendance: workshop.attendance + 1,
   });
   return res.status(200).json({
     guest: {
@@ -316,11 +465,94 @@ exports.ticketScan = async (req, res) => {
       email: guest.email,
       ticketStatus: ticketId.status,
       amount: ticketId.amount,
-      workshopTitle: model.title,
-      workshopDescription: model.description,
-      workshopStart: model.startDate,
-      workshopDate: model.endDate,
-      workshopStatus: model.status,
+      workshopTitle: workshop.title,
+      workshopDescription: workshop.description,
+      workshopStart: workshop.startDate,
+      workshopDate: workshop.endDate,
+      workshopStatus: workshop.status,
     },
   });
+};
+
+exports.createFreeWorkshopTicket = async (req, res) => {
+  try {
+    const workshopId = req.body.workshopId;
+
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorised" });
+    }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const customerId = decodedToken.id;
+    const customer = await Customer.findOne({ where: { id: customerId } });
+    if (!customer) {
+      return res.status(404).json({ error: "customer not found" });
+    }
+    const workshop = await Workshop.findOne({
+      where: { id: workshopId },
+    });
+    if (!workshop) {
+      return res.status(403).json({
+        error: "There is no workshop with that id",
+      });
+    }
+    const hostId = workshop.hostId;
+    const sessionAmount = 0;
+    const toBeTaxed = 0;
+    const tax = 0;
+    const amount = 0;
+    const name = customer.firstName;
+    const email = customer.email;
+    const capacity = workshop.capacity;
+    const ticketsBought = workshop.boughtTickets;
+
+    if (ticketsBought === capacity) {
+      await workshop.update({ fullCapacity: true });
+      const checkWaitlist = await Waitlist.findOne({
+        where: {
+          customerId: customer.id,
+          workshopId,
+        },
+      });
+
+      if (checkWaitlist) {
+        return res.status(403).json({ error: "already in the waitlist" });
+      }
+      await Waitlist.create({
+        name,
+        email,
+        workshopId,
+        customerId: customer.id,
+      });
+      return res.status(403).json({
+        error: "Full capacity reached, we've added you to the waitlist",
+      });
+    }
+    const newTicket = await WorkshopTicket.create({
+      email,
+      name,
+      customerId,
+      workshopId,
+    });
+    const url = newTicket.ticketId;
+    const title = workshop.title;
+    const listingDescription = workshop.description;
+    const date = workshop.startDate;
+
+    await new Email(
+      customer,
+      url,
+      title,
+      listingDescription,
+      date,
+      amount
+    ).workshopTicket();
+
+    return res.status(200).json({
+      message: "Ticket sent to your email",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 };

@@ -5,10 +5,11 @@ const experience = require("../controllers/experienceController");
 const experienceTicketController = require("../controllers/experienceTicket");
 
 const roleRestrict = require("./../utils/midlewares/experienceMiddleware");
+const experienceTicket = require("../models/experienceTicket");
 router.post("/rating/:experienceId", experience.rateClass);
 router.get("/book/:experienceId", experience.initializeBookingPayment);
 router.get("/ticket/verify", experience.verifyPayment);
-
+router.post("/:experienceId/scan", experienceTicketController.ticketScan);
 router.post("/:experience/comments", experience.ExperienceComments);
 // router.post("/cancelticket/:ticketId", experience.cancelTicket);
 router.get("/upcoming", experience.getUpcoming);

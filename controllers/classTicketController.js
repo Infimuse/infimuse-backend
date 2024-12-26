@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const qrcode = require("qrcode");
 const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
+const { where } = require("sequelize");
 const testCallbackUrl = "http://localhost:8080/api/v1/class-tickets/verify";
 const callbackUrl = "https://whatever.lat/api/v1/class-tickets/verify";
 const Community = db.communities;
@@ -15,11 +16,17 @@ const ClassSession = db.classSessions;
 const PaymentTransaction = db.paymentTransactions;
 const CancelTicket = db.cancelTickets;
 const Host = db.hosts;
+const HostPlan = db.hostPlans;
 const Guest = db.guests;
+const Waitlist = db.waitlists;
+const DST_Tax = process.env.DST_Tax;
+const InfimuseAccount = db.InfimuseAccount;
+const Commission = db.commissions;
 const CommunityMembership = db.communityMemberships;
 const group4discount = process.env.GROUP_OF_4_DISCOUNT;
 const group2discount = process.env.GROUP_OF_2_DISCOUNT;
 // exports.createClassTicket = factory.createDoc(ClassTicket);
+const DST = db.DST;
 exports.getClassTicket = factory.getOneDoc(ClassTicket);
 exports.getAllClassTickets = factory.getAllDocs(ClassTicket);
 exports.updateClassTicket = factory.updateDoc(ClassTicket);
@@ -113,7 +120,16 @@ exports.cancelTicket = async (req, res, next) => {
 };
 
 exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
-  const { email, name } = req.body;
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorised" });
+  }
+  const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+  const id = decodedToken.id;
+  const customer = await Customer.findOne({ where: id });
+  if (!customer) {
+    return res.status(404).json({ error: "customer not found" });
+  }
   const classSessionId = req.body.sessionClassId;
   const classSession = await ClassSession.findOne({
     where: { id: classSessionId },
@@ -124,7 +140,37 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
     });
   }
   const hostId = classSession.hostId;
-  const amount = classSession.price;
+  const sessionAmount = classSession.price * 100;
+  const toBeTaxed = sessionAmount * 1.5;
+  const tax = Math.ceil(toBeTaxed / 100);
+  const amount = sessionAmount + tax;
+  const name = customer.firstName;
+  const email = customer.email;
+  const capacity = classSession.capacity;
+  const ticketsBought = classSession.boughtTickets;
+
+  if (ticketsBought === capacity) {
+    await classSession.update({ fullCapacity: true });
+    const checkWaitlist = await Waitlist.findOne({
+      where: {
+        customerId: customer.id,
+        classSessionId,
+      },
+    });
+
+    if (checkWaitlist) {
+      return res.status(403).json({ error: "already in the waitlist" });
+    }
+    await Waitlist.create({
+      name,
+      email,
+      classSessionId,
+      customerId: customer.id,
+    });
+    return res.status(403).json({
+      error: "Full capacity reached, we've added you to the waitlist",
+    });
+  }
 
   const paymentDetails = {
     amount,
@@ -140,7 +186,7 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
   const data = await paystackApi.initializePayment(paymentDetails);
   const docHolder = await TicketHolder.create({
     classSessionId,
-    customerId: req.body.customerId,
+    customerId: id,
     reference: data.reference,
     hostId,
   });
@@ -158,7 +204,6 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     if (!reference) {
       throw new Error("Missing transaction reference");
     }
-
     const {
       data: {
         metadata: { email, amount, name },
@@ -171,9 +216,10 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       throw new Error(`Transaction: ${transactionStatus}`);
     }
 
+    const actualAmount = amount / 100;
     const [payment, created] = await ClassTicket.findOrCreate({
       where: { paymentReference },
-      defaults: { amount, email, name, paymentReference },
+      defaults: { amount: actualAmount, email, name, paymentReference },
     });
 
     if (!created) {
@@ -244,16 +290,84 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       channelLink
     ).classTicket();
 
+    await InfimuseAccount.create({
+      amount: amount / 100,
+      reference,
+      transactionType: "Booking",
+    });
     const hostId = classSession.hostId;
+    const tickets = classSession.boughtTickets + 1;
+    await classSession.update({ boughtTickets: tickets });
+    await findTicket.destroy();
+
+    await classSession.update({
+      listingWorth: classSession.price * tickets,
+    });
+    const toBeTaxed = actualAmount * 1.5;
+    const tax = toBeTaxed / 100;
+    const date = Date.now();
+    await DST.create({
+      hostId,
+      amount: tax,
+      date,
+    });
+
+    const ticketAmount = actualAmount - tax;
+
+    const hostPlan = await HostPlan.findOne({
+      where: { hostId },
+    });
+    let commissionPercentage;
+    if (hostPlan.subscription === "freePlan") {
+      commissionPercentage = 8;
+      const commission = (commissionPercentage * ticketAmount) / 100;
+      await ticket.update({ amount: ticketAmount - commission });
+      const vat = 0.16 * commission;
+      await Commission.create({
+        amount: commission,
+        reference: ticket.paymentReference,
+        comissionType: "bookingFee",
+        customerId: customer.id,
+        hostId: hostId,
+        VAT: vat,
+      });
+    } else if (hostPlan.subscription === "growth") {
+      commissionPercentage = 5;
+      const commission = (commissionPercentage * ticketAmount) / 100;
+      await ticket.update({ amount: ticketAmount - commission });
+      const vat = 0.16 * commission;
+      await Commission.create({
+        amount: commission,
+        reference: ticket.paymentReference,
+        comissionType: "bookingFee",
+        customerId: customer.id,
+        hostId: hostId,
+        VAT: vat,
+      });
+    } else if (hostPlan.subscription === "professional") {
+      commissionPercentage = 2.9;
+      const commission = (commissionPercentage * ticketAmount) / 100;
+      await ticket.update({ amount: ticketAmount - commission });
+      const vat = 0.16 * commission;
+      await Commission.create({
+        amount: commission,
+        reference: ticket.paymentReference,
+        comissionType: "bookingFee",
+        customerId: customer.id,
+        hostId: hostId,
+        VAT: vat,
+      });
+    }
 
     const communities = await Community.findOne({
       where: { hostId },
     });
-
     if (!communities) {
-      return res
-        .status(404)
-        .json({ error: "The host has not created a community yet" });
+      return res.status(404).json({
+        error:
+          "Ticket sent to your email but the host has not created a community yet we'll notify you when they do",
+        data: payment,
+      });
     }
     const existingMembership = await CommunityMembership.findOne({
       where: {
@@ -268,20 +382,29 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
         customerId: findTicket.customerId,
       });
     }
-    await findTicket.destroy();
 
     return res.status(200).json({
       message: "Payment verified",
       data: payment,
     });
   } catch (error) {
-    console.error("Error verifying payment:", error);
     return res.status(500).json({ error: error.message });
   }
 });
 
 exports.ticketScan = async (req, res) => {
   const qrcode = req.body.qrcode;
+  const classId = req.params.classId;
+
+  const classSession = await ClassSession.findOne({
+    where: { id: classId },
+  });
+  if (!classSession) {
+    return res
+      .status(404)
+      .json({ error: "There is no classSession with that id" });
+  }
+
   if (!qrcode) {
     return res.status(403).json({ error: "There is no qrcode to be scanned" });
   }
@@ -295,6 +418,18 @@ exports.ticketScan = async (req, res) => {
   if (ticketId.ticketStatus != "ACTIVE") {
     return res.status(403).json({ error: "ticket status is not active" });
   }
+  const now = new Date();
+  const tenHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+  if (classSession.lastScannedAt && classSession.lastScannedAt > tenHoursAgo) {
+    return res.status(403).json({
+      error:
+        "This ticket has already been scanned for this session, can't scan twice",
+      lastScannedAt: classSession.lastScannedAt,
+    });
+  }
+  await classSession.update({
+    lastScannedAt: now,
+  });
   const model = await ClassSession.findOne({
     where: { id: ticketId.classSessionId },
   });
@@ -381,7 +516,7 @@ exports.createGroupTicket = async (req, res) => {
     const paymentDetails = {
       amount: toBePaid,
       email,
-      callback_url: callbackUrl,
+      callback_url: testCallbackUrl,
       metadata: {
         amount: toBePaid,
         email,
@@ -437,7 +572,7 @@ exports.createGroupTicket = async (req, res) => {
     const paymentDetails = {
       amount: toBePaid,
       email,
-      callback_url: callbackUrl,
+      callback_url: testCallbackUrl,
       metadata: {
         amount,
         email,
@@ -485,5 +620,88 @@ exports.createGroupTicket = async (req, res) => {
       message: "Payment initialized successfully",
       data,
     });
+  }
+};
+
+exports.createFreeClassTickets = async (req, res) => {
+  try {
+    const classSessionId = req.body.classSessionId;
+
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorised" });
+    }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const customerId = decodedToken.id;
+    const customer = await Customer.findOne({ where: { id: customerId } });
+    if (!customer) {
+      return res.status(404).json({ error: "customer not found" });
+    }
+    const classSession = await ClassSession.findOne({
+      where: { id: classSessionId },
+    });
+    if (!classSession) {
+      return res.status(403).json({
+        error: "There is no classSession with that id",
+      });
+    }
+    const hostId = classSession.hostId;
+    const sessionAmount = 0;
+    const toBeTaxed = 0;
+    const tax = 0;
+    const amount = 0;
+    const name = customer.firstName;
+    const email = customer.email;
+    const capacity = classSession.capacity;
+    const ticketsBought = classSession.boughtTickets;
+
+    if (ticketsBought === capacity) {
+      await classSession.update({ fullCapacity: true });
+      const checkWaitlist = await Waitlist.findOne({
+        where: {
+          customerId: customer.id,
+          classSessionId,
+        },
+      });
+
+      if (checkWaitlist) {
+        return res.status(403).json({ error: "already in the waitlist" });
+      }
+      await Waitlist.create({
+        name,
+        email,
+        classSessionId,
+        customerId: customer.id,
+      });
+      return res.status(403).json({
+        error: "Full capacity reached, we've added you to the waitlist",
+      });
+    }
+    const newTicket = await ClassTicket.create({
+      email,
+      name,
+      customerId,
+      classSessionId,
+    });
+    const url = newTicket.ticketId;
+    const title = classSession.title;
+    const listingDescription = classSession.description;
+    const date = classSession.startDate;
+
+    await new Email(
+      customer,
+      url,
+      title,
+      listingDescription,
+      date,
+      amount
+    ).classTicket();
+
+    return res.status(200).json({
+      message: "Ticket sent to your email",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };

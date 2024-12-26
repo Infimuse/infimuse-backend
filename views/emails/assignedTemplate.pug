@@ -1,0 +1,13 @@
+extends baseEmail
+
+block content
+  p Hi #{firstName},
+  p You have been assigned a new template by your host. Please find the details below.
+  p Template Description: 
+    li Template Title: #{title}
+    li Description: #{listingDescription}
+    li Host:#{url}
+
+  
+  p Please visit the dashbord to see the assigned template. If you have any questions, feel free to reach out to your host.
+  p Thank you,

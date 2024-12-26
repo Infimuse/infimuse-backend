@@ -6,11 +6,11 @@ const jwt = require("jsonwebtoken");
 
 const getPackageLimitForPlan = (hostPlan) => {
   switch (hostPlan) {
-    case "FreePlan":
+    case "freePlan":
       return 100;
-    case "Growth":
+    case "growth":
       return 100;
-    case "Professional":
+    case "professional":
       return 2000;
 
     default:
@@ -40,16 +40,53 @@ module.exports = roleRestrict = async (req, res, next) => {
     if (!plan) {
       return res.status(404).json({ msg: "Please subscribe to a plan" });
     }
+    if (plan.period === "annual") {
+      const now = new Date();
+      const formattedDate = now.toISOString().split("T")[0];
 
-    const packageLimit = getPackageLimitForPlan(plan.subscription);
+      if (plan.expiresAt <= now) {
+        return res.status(400).json({
+          error: "Your plan has expired please update/renew your plan",
+        });
+      }
 
-    const currentPackageCount = await PackageClass.count({
-      where: { hostId },
-    });
-    if (currentPackageCount > packageLimit) {
-      return res.status(403).json({
-        Msg: "You have reached your maximum number of listing based on your subscription",
+      const packageLimit = getPackageLimitForPlan(plan.subscription);
+      const newLimit = packageLimit * 12;
+
+      const currentPackageCount = await PackageClass.count({
+        where: { hostId, status: "UPCOMING" },
       });
+      if (currentPackageCount > newLimit) {
+        return res.status(403).json({
+          Msg: "You have reached your maximum number of Packages based on your subscription,please upgrade to create more venues",
+          currentSubscription: plan.subscription,
+          totalListedPackages: currentPackageCount,
+          allowedVenues: `less than ${currentPackageCount}`,
+        });
+      }
+    } else if (plan.period === "month") {
+      const now = new Date();
+      const formattedDate = now.toISOString().split("T")[0];
+
+      if (plan.expiresAt <= now) {
+        return res.status(400).json({
+          error: "Your plan has expired please update/renew your plan",
+        });
+      }
+
+      const packageLimit = getPackageLimitForPlan(plan.subscription);
+
+      const currentPackageCount = await PackageClass.count({
+        where: { hostId, status: "UPCOMING" },
+      });
+      if (currentPackageCount > packageLimit) {
+        return res.status(403).json({
+          Msg: "You have reached your maximum number of Packages based on your subscription,please upgrade to create more venues",
+          currentSubscription: plan.subscription,
+          totalListedPackages: currentPackageCount,
+          allowedVenues: `less than ${currentPackageCount}`,
+        });
+      }
     }
 
     next();

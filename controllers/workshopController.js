@@ -27,6 +27,7 @@ const mattermostUrl = process.env.MATTERMOST_URL;
 const adminUsername = process.env.ADMIN_USERNAME;
 const adminPassword = process.env.ADMIN_PASSWORD;
 const team_id = process.env.TEAM_ID;
+const WorkshopClass = db.workshopClasses;
 const chatRoomLink = process.env.CHANNELROOMLINK;
 // Enable trusting of proxy headers
 https: http: app.set("trust proxy", true);
@@ -49,6 +50,14 @@ const getAuthToken = async () => {
 };
 
 exports.createWorkshop = async (req, res, next) => {
+  const token =
+    req.headers.authorization && req.headers.authorization.split(" ")[1];
+  if (!token) {
+    return res.status(404).json({ error: "Please login" });
+  }
+
+  const decodedToken = jwt.verify(token, jwtSecret);
+  const hostId = decodedToken.id;
   try {
     const doc = await Workshop.create({
       title: req.body.title,
@@ -66,7 +75,7 @@ exports.createWorkshop = async (req, res, next) => {
       ageMin: req.body.ageMin,
       ageMax: req.body.ageMax,
       templateStatus: req.body.templateStatus,
-      hostId: req.body.hostId,
+      hostId,
     });
     const workshopId = doc.id;
 
@@ -86,9 +95,8 @@ exports.createWorkshop = async (req, res, next) => {
         `${mattermostUrl}/channels`,
         {
           name,
-          display_name: doc.title,
           team_id,
-          display_name: doc.title,
+          display_name: `${uniqueChannelName}-${doc.title}`,
           header: doc.title,
           type: "O",
         },
@@ -108,11 +116,9 @@ exports.createWorkshop = async (req, res, next) => {
         doc,
       });
     } catch (error) {
-      console.log(error);
       return res.status(500).json({ error: "Internal server error" });
     }
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ status: "Internal server error" });
   }
 };
@@ -156,7 +162,11 @@ exports.getWorkshop = async (req, res, next) => {
         .status(404)
         .render("error404", { error: "Document not found" });
     }
+    const workshopClass = await WorkshopClass.findAll({
+      where: { workshopId },
+    });
 
+    const totalWorkshopClasses = workshopClass.length;
     const totalWorkshopAmount = parseInt(totalTickets.length) * doc.price;
     const totalRefundableAmount = canceledTicket.length * doc.price;
     const processingFee = (8 / 100) * totalWorkshopAmount;
@@ -169,6 +179,7 @@ exports.getWorkshop = async (req, res, next) => {
       TotalCanceledTickets: canceledTicket.length,
       WorkshopTotalAmount: totalWorkshopAmount,
       WorkshopTotalRefundableAmount: totalRefundableAmount,
+      totalWorkshopClasses: totalWorkshopClasses,
       ProcessingFee: processingFee,
       AmountPayable: AmountPayable,
       Data: doc,
@@ -302,11 +313,11 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
   const amount = workshop.price;
 
   const paymentDetails = {
-    amount,
+    amount: amount * 100,
     email,
     callback_url: callbackUrl,
     metadata: {
-      amount,
+      amount: amount * 100,
       email,
       name,
     },

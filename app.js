@@ -5,6 +5,10 @@ const path = require("path");
 const bodyParser = require("body-parser");
 const url = "/api/v1";
 const jwt = require("jsonwebtoken");
+const https = require("https");
+const db = require("./models");
+
+const Withdrawal = db.withdrawals;
 
 dotenv.config();
 
@@ -47,12 +51,22 @@ const venue = require("./routes/venueRoutes");
 const overallPayouts = require("./routes/overallPayout");
 const mattermost = require("./routes/mattermost");
 const community = require("./routes/communitiesRoute");
-const db = require("./models");
+const admin = require("./routes/adminRoutes");
+const freeClassRoutes = require("./routes/freeClassesRoutes");
+const freeWorkshopRoutes = require("./routes/freeWorkshopRoutes");
+const freePackageRoutes = require("./routes/freePackageRoutes");
+const freeExperienceRoutes = require("./routes/freeExperienceRoutes");
+const sessionVenueRoutes = require("./routes/sessionVenueRoutes");
+const sessionBookingRoutes = require("./routes/sessionBookingRoutes");
 const Host = db.hosts;
+const axios = require("axios");
 const TransferRecipient = db.transferRecipient;
 const ServerApproval = db.serverApproval;
 const Message = db.messages;
 const paystackKey = process.env.PAYSTACK_TEST_KEY;
+const Wallet = db.wallets;
+const HostPlan = db.hostPlans;
+const Commission = db.commissions;
 const app = express();
 
 const paystackPayout = require("./controllers/paystackPayout");
@@ -67,10 +81,12 @@ app.use(cors(corsOption));
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "pug");
 app.use(express.static(path.join(__dirname, "public")));
-
+app.use(express.static("public"));
+// Set view engine to EJS
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
 const port = process.env.PORT;
 
-// Validation function for transfer request
 function validateTransferRequest(body) {
   const reference = body.reference;
   if (!reference) {
@@ -81,9 +97,16 @@ function validateTransferRequest(body) {
 
 app.post(`${url}/approval`, async (req, res) => {
   const { body } = req;
+  const token =
+    req.headers.authorization && req.headers.authorization.split(" ")[1];
+  if (!token) {
+    return res.status(403).json({ error: "Please login" });
+  }
+  const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+  const hostId = decodedToken.id;
+  const host = await Host.findOne({ where: { id: hostId } });
 
   const isValidTransferRequest = validateTransferRequest(body);
-
   if (!isValidTransferRequest) {
     return res
       .status(403)
@@ -93,20 +116,94 @@ app.post(`${url}/approval`, async (req, res) => {
   const referenceCheck = await ServerApproval.findOne({
     where: { reference: body.reference },
   });
-
   if (!referenceCheck) {
     return res.status(400).json({ error: "Invalid reference" });
   }
 
-  return res.status(200).json({ message: "Approval successful" });
+  const availableBalance = await Wallet.findOne({ where: { hostId } });
+  if (!availableBalance) {
+    return res.status(404).json({ error: "Balance not found" });
+  }
+
+  const currentBalance = availableBalance.walletAmount;
+  const withdrawnAmount = referenceCheck.amount;
+
+  let withdrawFee;
+  let withdrawTax;
+  const plan = await HostPlan.findOne({ where: { hostId } });
+
+  if (plan.subscription === "freePlan") {
+    withdrawFee = 100;
+    withdrawTax = withdrawFee * 0.16;
+  } else if (plan.subscription === "growth") {
+    withdrawFee = 0;
+    withdrawTax = 0;
+  } else if (plan.subscription === "professional") {
+    withdrawFee = 0;
+    withdrawTax = 0;
+  }
+
+  const transferRecipient = await TransferRecipient.findOne({
+    where: { hostId },
+  });
+  const recipient_code = transferRecipient.recipient_code;
+
+  const transferData = {
+    source: "balance",
+    amount: withdrawnAmount * 100,
+    recipient: recipient_code,
+    reason: "Withdrawal from wallet",
+  };
+
+  try {
+    const response = await axios.post(
+      "https://api.paystack.co/transfer",
+      transferData,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_TEST_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    await Commission.create({
+      amount: withdrawFee - withdrawTax,
+      reference: response.data.data.reference,
+      comissionType: "withdrawalFee",
+      customerId: null,
+      hostId,
+      VAT: withdrawTax,
+    });
+
+    const totalWithdrawn = withdrawnAmount + withdrawFee;
+    const newBalance = currentBalance - totalWithdrawn;
+    await availableBalance.update({ walletAmount: newBalance });
+
+    await Withdrawal.create({
+      name: host.firstName,
+      accountNumber: host.phone,
+      email: host.email,
+      reference_code: response.data.data.reference,
+      amount: withdrawnAmount,
+      hostId,
+    });
+    return res.status(200).json({
+      message: "Approval successful",
+      transferResponse: response.data,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      error: "Transfer failed",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
 });
 
 app.post(
   `${url}/api/paystack`,
   paystackPayout.paystackMiddleware,
   async (req, res) => {
-    // const { name, account_number, hostId } = req.body;
-
     const token =
       req.headers.authorization && req.headers.authorization.split(" ")[1];
     if (!token) {
@@ -119,8 +216,14 @@ app.post(
     if (!host) {
       return res.status(404).json({ error: "The host is not found" });
     }
+
+    // Update phone format
+    let account_number = host.phone;
+    if (account_number.startsWith("254")) {
+      account_number = "0" + account_number.slice(3);
+    }
+
     const name = host.firstName;
-    const account_number = host.phone;
 
     const params = {
       type: "mobile_money",
@@ -150,8 +253,11 @@ app.post(
 
       response.on("end", async () => {
         const responseData = JSON.parse(data);
-        const recipient_code = responseData.data.recipient_code;
 
+        if (!responseData.data) {
+          return res.status(400).json({ error: responseData.message });
+        }
+        const recipient_code = responseData.data.recipient_code;
         const existingCode = await TransferRecipient.findOne({
           where: { recipient_code },
         });
@@ -186,6 +292,9 @@ app.post(
 );
 
 const http = require("http");
+const wallet = require("./models/wallet");
+const host = require("./models/host");
+const freeWorkshop = require("./models/freeWorkshop");
 require("dotenv").config();
 
 const server = http.createServer(app);
@@ -202,11 +311,20 @@ app.use(`${url}/package-classes`, packageClassRoutes);
 app.use(`${url}/workshops`, workshopRoutes);
 app.use(`${url}/experiences`, experienceRoutes);
 
+// sessionBookings
+app.use(`${url}/session-booking`, sessionBookingRoutes);
+// free classes
+app.use(`${url}/verify/free-classSessions`, freeClassRoutes);
+app.use(`${url}/verify/free-workshops`, freeWorkshopRoutes);
+app.use(`${url}/verify/free-experiences`, freeExperienceRoutes);
+app.use(`${url}/verify/free-packages`, freePackageRoutes);
+
 // users
 app.use(`${url}/hosts`, hostRoutes);
 app.use(`${url}/customers`, customerRoutes);
 app.use(`${url}/guests`, guestRoutes);
 app.use(`${url}/staffs`, staffRoutes);
+app.use(`${url}/admin`, admin);
 
 // tickets
 app.use(`${url}/class-tickets`, classTicketRoutes);
@@ -242,6 +360,7 @@ app.use(`${url}/waitlists`, waitlistRoutes);
 app.use(`${url}/wishlists`, wishlistsRoutes);
 
 // locations
+app.use(`${url}/session-venues`, sessionVenueRoutes);
 
 app.use(`${url}/locations`, locationRoutes);
 app.use(`${url}/venues`, venue);

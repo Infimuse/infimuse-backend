@@ -89,6 +89,13 @@ const getAuthToken = async () => {
 
 exports.createClassSession = async (req, res, next) => {
   try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "please login" });
+    }
+
+    const decodedToken = jwt.verify(token, jwtSecret);
+    const hostId = decodedToken.id;
     // Create a new class session
     const doc = await ClassSession.create({
       title: req.body.title,
@@ -107,7 +114,7 @@ exports.createClassSession = async (req, res, next) => {
       ageMin: req.body.ageMin,
       ageMax: req.body.ageMax,
       templateStatus: req.body.templateStatus,
-      hostId: req.body.hostId,
+      hostId: hostId,
       classCategory: req.body.classCategory,
     });
 
@@ -122,7 +129,6 @@ exports.createClassSession = async (req, res, next) => {
         .randomBytes(2)
         .toString("hex")
         .toLowerCase();
-      console.log(uniqueChannelName);
       const token = await getAuthToken();
       const name = `${uniqueChannelName}-${doc.title}`;
       const createMattermostGroup = await axios.post(
@@ -131,7 +137,7 @@ exports.createClassSession = async (req, res, next) => {
           name,
           display_name: doc.title,
           team_id,
-          display_name: doc.title,
+          display_name: `${uniqueChannelName}-${doc.title}`,
           header: doc.title,
           type: "O",
         },
@@ -144,6 +150,7 @@ exports.createClassSession = async (req, res, next) => {
       );
       const channelLink = `${chatRoomLink}/${name}`;
       await doc.update({ channelLink });
+
       return res.status(200).json({
         status: "Document/channel created successfully",
         bookingUrl: bookExperienceUrl,
@@ -309,7 +316,7 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
   }
   const hostId = classSession.hostId;
 
-  const amount = classSession.price;
+  const amount = classSession.price * 100;
 
   const paymentDetails = {
     amount,

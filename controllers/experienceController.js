@@ -10,6 +10,7 @@ const callbackUrl = "https://whatever.lat/api/v1/experiences/ticket/verify";
 const crypto = require("crypto");
 const axios = require("axios");
 const Email = require("../utils/email");
+const Venue = db.venues;
 const Experience = db.experiences;
 const ExperienceTicket = db.experienceTickets;
 const CancelTicket = db.cancelTickets;
@@ -82,24 +83,68 @@ const getAuthToken = async () => {
 
 exports.createExperience = async (req, res, next) => {
   try {
+    const title = req.body.title;
+    const description = req.body.description;
+    const posterUrl = req.body.posterUrl;
+    const capacity = req.body.capacity;
+    const fullCapacity = req.body.fullCapacity;
+    const startDate = req.body.startDate;
+    const endDate = req.body.endDate;
+    const startTime = req.body.startTime;
+    const endTime = req.body.endTime;
+    const date = req.body.date;
+    const price = req.body.price;
+    const capacityStatus = req.body.capacityStatus;
+    const ageGroup = req.body.ageGroup;
+    const ageMin = req.body.ageMin;
+    const ageMax = req.body.ageMax;
+    const templateStatus = req.body.templateStatus;
+    const venueId = req.body.venueId;
+    const experienceCategory = req.body.experienceCategory;
+
+    const token =
+      req.headers.authorization && req.headers.authorization.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ message: "Please login" });
+    }
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const hostId = decodedToken.id;
+    if (!venueId) {
+      return res.status(403).json({ error: "Please provide the venueId" });
+    }
+
+    const venueCheck = await Venue.findOne({ where: { id: venueId } });
+    if (!venueCheck) {
+      return res.status(404).json({ error: "No venue with that id found" });
+    }
+    if (venueCheck.hostId !== hostId) {
+      return res
+        .status(403)
+        .json({ error: "The venue you selected does not belong to you" });
+    }
+
     const doc = await Experience.create({
-      title: req.body.title,
-      description: req.body.description,
-      posterUrl: req.body.posterUrl,
-      capacity: req.body.capacity,
-      fullCapacity: req.body.fullCapacity,
-      startDate: req.body.startDate,
-      endDate: req.body.endDate,
-      startTime: req.body.startTime,
-      endTime: req.body.endTime,
-      date: req.body.date,
-      price: req.body.price,
-      capacityStatus: req.body.capacityStatus,
-      ageGroup: req.body.ageGroup,
-      ageMin: req.body.ageMin,
-      ageMax: req.body.ageMax,
-      templateStatus: req.body.templateStatus,
-      hostId: req.body.hostId,
+      title: title,
+      description: description,
+      posterUrl: posterUrl,
+      capacity: capacity,
+      fullCapacity: fullCapacity,
+      startDate: startDate,
+      endDate: endDate,
+      startTime: startTime,
+      endTime: endTime,
+      date: date,
+      price: price,
+      capacityStatus: capacityStatus,
+      ageGroup: ageGroup,
+      ageMin: ageMin,
+      ageMax: ageMax,
+      templateStatus: templateStatus,
+      hostId: hostId,
+      venueId,
+      experienceCategory,
     });
     const experienceId = doc.id;
 
@@ -120,7 +165,7 @@ exports.createExperience = async (req, res, next) => {
           name,
           display_name: doc.title,
           team_id,
-          display_name: doc.title,
+          display_name: `${uniqueChannelName}-${doc.title}`,
           header: doc.title,
           type: "O",
         },
@@ -144,6 +189,7 @@ exports.createExperience = async (req, res, next) => {
       return res.status(500).json({ error: "Internal server error" });
     }
   } catch (err) {
+    console.log(err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -292,10 +338,10 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
 
   const paymentDetails = {
     amount,
-    email,
+    email: amount * 100,
     callback_url: callbackUrl,
     metadata: {
-      amount,
+      amount: amount * 100,
       email,
       name,
     },

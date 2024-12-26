@@ -2,12 +2,15 @@ const express = require("express");
 const router = express.Router();
 const workshopClassController = require("../controllers/workshopClassController");
 const hostAuthController = require("./../controllers/hostAuthController");
+const workshopTicket = require("./../controllers/workshopTicket");
 // const roleRestrict = require("./../utils/midlewares/workshopClassMiddleware");
 
 router.post(
   "/:workshopClassId/comments",
   workshopClassController.workshopClassComents
 );
+
+router.post("/:workshopClassId/scan/", workshopTicket.ticketScan);
 
 router
   .route("/")

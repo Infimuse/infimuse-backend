@@ -205,3 +205,42 @@ exports.getAllCategory = (category) => async (req, res) => {
     return res.status(500).json({ err: "Internal server error" });
   }
 };
+
+exports.getAllHosts = (Model) => async (req, res) => {
+  try {
+    // Pagination
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 15;
+    const offset = (page - 1) * limit;
+
+    // Sorting
+    const sortFields = ["location", "price", "rating"];
+    const sortBy = req.query.sort || "rating";
+    const order = sortFields.includes(sortBy) ? sortBy : "rating";
+    const sortOrder = order === "rating" ? "DESC" : "ASC";
+
+    // Location Filter
+    const locationFilter = req.query.location;
+    const whereClause = locationFilter ? { location: locationFilter } : {};
+
+    // Fetch documents
+    const docs = await Model.findAll({
+      limit,
+      offset,
+      order: [
+        [order, "DESC"], // Sort by rating in descending order
+        ["createdAt", "DESC"], // Then sort by creation date in descending order
+      ],
+      where: whereClause,
+    });
+
+    return res.status(200).json({
+      result: "Success",
+      TotalDocs: docs.length,
+      Document: docs,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ Error: "Internal server error" });
+  }
+};

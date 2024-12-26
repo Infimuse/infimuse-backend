@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const venuesController = require("../controllers/venueController");
+const roleRestrict = require("../utils/midlewares/venueMiddleware");
 router
   .route("/")
   .get(venuesController.getVenues)
-  .post(venuesController.createVenue);
+  .post(roleRestrict, venuesController.createVenue);
 
 router
   .get("/:id")

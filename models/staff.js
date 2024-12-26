@@ -32,7 +32,7 @@ module.exports = (sequelize, DataTypes) => {
       imageUrl: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
+        unique: false,
       },
       phone: DataTypes.STRING,
       OTP: DataTypes.STRING,

@@ -6,11 +6,11 @@ const HostPlan = db.hostPlans;
 
 const getWorkshopLimitPlan = (hostPlanId) => {
   switch (hostPlanId) {
-    case "FreePlan":
+    case "freePlan":
       return 100;
-    case "Growth":
-      return 100;
-    case "Professional":
+    case "growth":
+      return 1;
+    case "professional":
       return 100;
 
     default:
@@ -41,17 +41,57 @@ module.exports = roleRestrict = async (req, res, next) => {
     if (!plan) {
       return res.status(404).json({ msg: "Please subscribe to a plan" });
     }
-    const workshopLimit = getWorkshopLimitPlan(plan.subscription);
-    const currentCount = await Workshop.count({ where: { hostId } });
+    if (plan.period === "annual") {
+      const now = new Date();
+      const formattedDate = now.toISOString().split("T")[0];
 
-    if (currentCount > workshopLimit) {
-      return res.status(403).json({
-        Msg: "You have reached your maximum number of listing based on your subscription",
+      if (plan.expiresAt <= now) {
+        return res.status(400).json({
+          error: "Your plan has expired please update/renew your plan",
+        });
+      }
+      const workshopLimit = getWorkshopLimitPlan(plan.subscription);
+      const newLimit = workshopLimit * 12;
+
+      const currentCount = await Workshop.count({
+        where: { hostId, status: "UPCOMING" },
       });
+
+      if (currentCount > newLimit) {
+        return res.status(403).json({
+          Msg: "You have reached your maximum number of Workshops based on your subscription,please upgrade to create more venues",
+          currentSubscription: plan.subscription,
+          totalListedVenues: currentCount,
+          allowedWorkshops: `less than ${currentCount}`,
+        });
+      }
+    } else if (plan.period === "month") {
+      const now = new Date();
+      const formattedDate = now.toISOString().split("T")[0];
+
+      if (plan.expiresAt <= now) {
+        return res.status(400).json({
+          error: "Your plan has expired please update/renew your plan",
+        });
+      }
+      const workshopLimit = getWorkshopLimitPlan(plan.subscription);
+      const currentCount = await Workshop.count({
+        where: { hostId, status: "UPCOMING" },
+      });
+
+      if (currentCount > workshopLimit) {
+        return res.status(403).json({
+          Msg: "You have reached your maximum number of Workshops based on your subscription,please upgrade to create more venues",
+          currentSubscription: plan.subscription,
+          totalListedVenues: currentCount,
+          allowedWorkshops: `less than ${currentCount}`,
+        });
+      }
     }
 
     next();
   } catch (error) {
+    console.log(error);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

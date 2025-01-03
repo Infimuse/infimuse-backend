@@ -8,13 +8,21 @@ const db_username = process.env.DATABASE_USERNAME;
 const db_password = process.env.DATABASE_PASSWORD;
 const db_host = process.env.DATABASE_HOST;
 const db_dialect = process.env.DATABASE_DIALECT;
+const db_port = process.env.DATABASE_PORT || 3306;
 
 const sequelize = new Sequelize(db_name, db_username, db_password, {
-  host: "127.0.0.1",
-  dialect: "mysql",
+  host: db_host,
+  dialect: db_dialect,
+  port: db_port,
   logging: false,
   define: {
     timestamps: true,
+  },
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false, // Required for Azure MySQL
+    },
   },
   sync: {
     alter: true,
@@ -23,8 +31,9 @@ const sequelize = new Sequelize(db_name, db_username, db_password, {
 
 sequelize
   .authenticate()
-  .then(() => console.log("database connected"))
-  .catch((err) => console.log(err));
+  .then(() => console.log("Connected to Azure MySQL successfully!"))
+  .catch((err) => console.error("Error connecting to Azure MySQL:", err));
+
 
 const db = {};
 

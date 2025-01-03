@@ -85,7 +85,7 @@ app.use(express.static("public"));
 // Set view engine to EJS
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-const port = process.env.PORT;
+const port = process.env.PORT || 80;
 
 function validateTransferRequest(body) {
   const reference = body.reference;

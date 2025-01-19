@@ -5,23 +5,23 @@ const paystackApi = require("../paystackApi");
 const jwt = require("jsonwebtoken");
 const Email = require("../utils/email");
 const testClassCallbackUrl =
-  "http://localhost:8080/api/v1/guests/class-tickets/verify";
+  "http://localhost:8079/api/v1/guests/class-tickets/verify";
 const classCallbackUrl =
   "https://whatever.lat/api/v1/guests/class-tickets/verify";
 
 const testWorkshopCallbackUrl =
-  "http://localhost:8080/api/v1/guests/workshop-tickets/verify";
+  "http://localhost:8079/api/v1/guests/workshop-tickets/verify";
 
 const workshopCallbackUrl =
   "https://whatever.lat/api/v1/guests/workshop-tickets/verify";
 
 const testPackageCallbackUrl =
-  "http://localhost:8080/api/v1/guests/package-tickets/verify";
+  "http://localhost:8079/api/v1/guests/package-tickets/verify";
 
 const packageCallbackUrl =
   "https://whatever.lat/api/v1/guests/package-tickets/verify";
 const testExperienceCallbackUrl =
-  "http://localhost:8080/api/v1/guests/experience-tickets/verify";
+  "http://localhost:8079/api/v1/guests/experience-tickets/verify";
 
 const experienceCallbackUrl =
   "https://whatever.lat/api/v1/guests/experience-tickets/verify";

@@ -9,7 +9,7 @@ const express = require("express");
 const app = express();
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-const testUrl = "http://localhost:8080/api/v1/hosts/accept-invite";
+const testUrl = "http://localhost:8079/api/v1/hosts/accept-invite";
 const liveUrl = "https://whatever.lat/api/v1/hosts/accept-invite";
 const Host = db.hosts;
 const Workshop = db.workshops;

@@ -5,7 +5,7 @@ const Email = require("../utils/email");
 const asyncWrapper = require("../asyncWrapper");
 const path = require("path");
 const testCallbackUrl =
-  "http://localhost:8080/api/v1/class-sessions/ticket/verify";
+  "http://localhost:8079/api/v1/class-sessions/ticket/verify";
 const callbackUrl = "https://whatever.lat/api/v1/class-sessions/ticket/verify";
 const paystackApi = require("../paystackApi");
 const crypto = require("crypto");

@@ -21,7 +21,7 @@ const DST = db.DST;
 const InfimuseAccount = db.InfimuseAccount;
 const CommunityMembership = db.communityMemberships;
 const test_callbackUrl =
-  "http://localhost:8080/api/v1/experience-tickets/verify";
+  "http://localhost:8079/api/v1/experience-tickets/verify";
 const callbackUrl = "https://whatever.lat/api/v1/experience-tickets/verify";
 let experienceId;
 
@@ -188,17 +188,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const channelLink = experience.channelLink;
     const qrCodeURL = ticket.ticketId;
 
-    new Email(
-      customer,
-      url,
-      null,
-      null,
-      null,
-      null,
-      qrCodeURL,
-      null,
-      channelLink
-    ).experienceTicket();
+
     await InfimuseAccount.create({
       amount: amount / 100,
       reference,
@@ -273,6 +263,23 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
         VAT: vat,
       });
     }
+
+    const ticketId = ticket.ticketId;
+
+
+    const emailInstance= new Email(
+      customer,
+      ticketId, 
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      channelLink
+    )
+
+    await emailInstance.experienceTicket();
     if (!communities) {
       return res.status(404).json({
         error:

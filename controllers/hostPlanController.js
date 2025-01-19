@@ -21,8 +21,8 @@ const professional_annually = process.env.ANNUAL_PROFESSIONAL_PLAN;
 const professional_monthly = process.env.MONTHLY_PROFESSIONAL_PLAN;
 const InfimuseAccount = db.InfimuseAccount;
 const growthCallbackUrl =
-  "http://localhost:8080/api/v1/hostplans/growthPlan/verify";
-const proCallbackUrl = "http://localhost:8080/api/v1/hostplans/proPlan/verify";
+  "http://localhost:8079/api/v1/hostplans/growthPlan/verify";
+const proCallbackUrl = "http://localhost:8079/api/v1/hostplans/proPlan/verify";
 const Commission = db.commissions;
 const MonthlySubsRecord = db.monthlySubsRecord;
 

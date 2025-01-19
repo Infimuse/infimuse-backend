@@ -18,7 +18,7 @@ const DST = db.DST;
 const HostPlan = db.hostPlans;
 const Commission = db.commissions;
 const CommunityMembership = db.communityMemberships;
-const callbackUrl = "http://localhost:8080/api/v1/workshop-tickets/verify";
+const callbackUrl = "http://localhost:8079/api/v1/workshop-tickets/verify";
 const Waitlist = db.waitlists;
 const InfimuseAccount = db.InfimuseAccount;
 
@@ -349,8 +349,24 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       VAT: vat,
     });
   }
+  const ticketId = ticket.ticketId;
 
-  https: if (!communities) {
+
+  const emailInstance= new Email(
+    customer,
+    ticketId, 
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    channelLink
+  )
+
+  await emailInstance.workshopTicket();
+
+   if (!communities) {
     return res.status(404).json({
       error:
         "Ticket sent to your email but the host has not created a community yet we'll notify you when they do",

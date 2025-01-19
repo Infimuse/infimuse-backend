@@ -6,7 +6,7 @@ const qrcode = require("qrcode");
 const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
 const { where } = require("sequelize");
-const testCallbackUrl = "http://localhost:8080/api/v1/class-tickets/verify";
+const testCallbackUrl = "http://localhost:8079/api/v1/class-tickets/verify";
 const callbackUrl = "https://whatever.lat/api/v1/class-tickets/verify";
 const Community = db.communities;
 const TicketHolder = db.ticketHolders;
@@ -196,7 +196,6 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
     data,
   });
 });
-
 exports.verifyPayment = asyncWrapper(async (req, res) => {
   try {
     const reference = req.query.reference;
@@ -262,12 +261,6 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const ticket = await ClassTicket.findOne({
       where: { paymentReference: findTicket.reference },
     });
-
-    if (!ticket) {
-      throw new Error("Ticket not found");
-    }
-
-    const url = ticket.ticketId;
     const classId = ticket.classSessionId;
     const classSession = await ClassSession.findOne({ where: { id: classId } });
 
@@ -275,20 +268,10 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       throw new Error("Class session not found");
     }
 
-    const channelLink = classSession.channelLink;
-    const qrCodeURL = ticket.ticketId;
 
-    new Email(
-      customer,
-      url,
-      null,
-      null,
-      null,
-      null,
-      qrCodeURL,
-      null,
-      channelLink
-    ).classTicket();
+    if (!ticket) {
+      throw new Error("Ticket not found");
+    }
 
     await InfimuseAccount.create({
       amount: amount / 100,
@@ -359,6 +342,24 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       });
     }
 
+    const ticketId = ticket.ticketId;
+
+    const channelLink = classSession.channelLink;
+
+    const emailInstance= new Email(
+      customer,
+      ticketId, 
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      channelLink
+    )
+
+    await emailInstance.classTicket();
+
     const communities = await Community.findOne({
       where: { hostId },
     });
@@ -388,10 +389,10 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       data: payment,
     });
   } catch (error) {
+    console.log(error)
     return res.status(500).json({ error: error.message });
   }
 });
-
 exports.ticketScan = async (req, res) => {
   const qrcode = req.body.qrcode;
   const classId = req.params.classId;

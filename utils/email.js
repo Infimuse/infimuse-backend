@@ -175,4 +175,8 @@ module.exports = class Email {
   async adminToken() {
     await this.send("adminToken", "Admin login Token");
   }
+
+  async groupTicket() {
+    await this.send("groupTicket", "Group Ticket Purchase");
+  }
 };

@@ -1,0 +1,21 @@
+extends baseEmail
+
+block content
+  p Hi #{firstName}, 
+  p Thank you for purchasing a group ticket for the class session. Below are the details of your group tickets. Please share these tickets with your group members.
+  p Note: Each ticket is unique and must be scanned at the gate for entry. If a ticket is in use by another person, it will be invalid for access.
+
+  each ticket in tickets
+    p Ticket for Member #{ticket.memberNumber}: 
+    if ticket.qrCodeURL
+      img(src=ticket.qrCodeURL alt='QR code for Member #{ticket.memberNumber}' style='width:200px;height:200px;')
+    else
+      p No QR code available for this ticket.
+
+  p Join the group communication channel to stay updated:
+  p a(href=channelLink) Click here to join the group channel.
+  
+  p Thank you for choosing Infimuse. We look forward to hosting you and your group!
+  
+  p Warm regards,
+  p - Akash Gahuri, CEO Infimuse

@@ -8,7 +8,7 @@ const paystackApi = require("../paystackApi");
 const express = require("express");
 const Email = require("../utils/email");
 // change when we go live
-const testCallbackUrl = "http://localhost:8080/api/v1/workshops/ticket/verify";
+const testCallbackUrl = "http://localhost:8079/api/v1/workshops/ticket/verify";
 const callbackUrl = "https://whatever.lat/api/v1/workshops/ticket/verify";
 const crypto = require("crypto");
 const jwtSecret = process.env.JWT_SECRET;

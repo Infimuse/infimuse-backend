@@ -20,7 +20,7 @@
   "homepage": "https://github.com/mike-mbugua/infimuse-backend#readme",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.583.0",
-    "@paystack/paystack-sdk": "^1.0.1",
+    "@azure/storage-blob": "^12.26.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.6.7",
     "bcryptjs": "^2.4.3",

@@ -5,7 +5,7 @@ const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
 const experienceTicket = require("./experienceTicket");
 const testCallbackUrl =
-  "http://localhost:8080/api/v1/experiences/ticket/verify";
+  "http://localhost:8079/api/v1/experiences/ticket/verify";
 const callbackUrl = "https://whatever.lat/api/v1/experiences/ticket/verify";
 const crypto = require("crypto");
 const axios = require("axios");

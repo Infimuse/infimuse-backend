@@ -2,36 +2,29 @@ const nodemailer = require("nodemailer");
 const pug = require("pug");
 const htmlToText = require("html-to-text");
 const QRCode = require("qrcode");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { BlobServiceClient } = require("@azure/storage-blob");
 
-const s3Client = new S3Client({
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY,
-    secretAccessKey: process.env.AWS_SECRET_KEY,
-  },
-});
+const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
 
 module.exports = class Email {
   constructor(
     user,
-    url,
+    ticketId,
     title,
     listingDescription,
     date,
     amount,
     otp,
-    qrCodeURL,
     channelLink
   ) {
     this.to = user.email;
     this.firstName = user.firstName;
-    this.url = url;
+    this.ticketId = ticketId;
     this.amount = amount;
     this.date = date;
     this.title = title;
     this.listingDescription = listingDescription;
     this.otp = otp;
-    this.qrCodeURL = qrCodeURL;
     this.channelLink = channelLink;
     this.from = `Infimuse <${process.env.EMAIL_FROM}>`;
   }
@@ -46,68 +39,80 @@ module.exports = class Email {
     });
   }
 
-  async generateQRCode(text) {
-    if (typeof text !== "string") {
-      throw new Error("QR code text must be a string");
+  async generateQRCode() {
+    if (!this.ticketId) {
+      throw new Error("No ticketId provided for QR code generation");
     }
 
     try {
-      const qrCodeDataURL = await QRCode.toDataURL(text);
+      // Generate QR code with the ticketId
+      const qrCodeDataURL = await QRCode.toDataURL(this.ticketId);
 
-      // Upload to S3
+      const ContainerClient = blobServiceClient.getContainerClient("qrcodes");
+
+      await ContainerClient.createIfNotExists({
+        access: "blob",
+      });
+      
+      const blobName = `qrcode-${this.ticketId}-${Date.now()}.png`;
+      const blockBlobClient = ContainerClient.getBlockBlobClient(blobName);
+      
+      // Upload to Azure Blob Storage
       const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
-      const key = `qrcodes/${Date.now()}.png`;
 
-      const params = {
-        Bucket: "infimuse",
-        Key: key,
-        Body: buffer,
-        ContentEncoding: "base64",
-        ContentType: "image/png",
-      };
+      await blockBlobClient.upload(buffer, buffer.length, {
+        blobHTTPHeaders: {
+          blobContentType: "image/png",
+          blobContentEncoding: "base64",
+        },
+      });
 
-      const command = new PutObjectCommand(params);
-      await s3Client.send(command);
-
-      const qrCodeURL = `https://${params.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${params.Key}`;
-      return qrCodeURL;
+      return blockBlobClient.url;
     } catch (err) {
       console.error("Error generating QR code:", err);
-      return null;
+      throw new Error(`Failed to generate QR code: ${err.message}`);
     }
   }
 
   async send(template, subject) {
-    let qrCodeURL = null;
-    if (this.url) {
-      qrCodeURL = await this.generateQRCode(this.url);
-    }
+    try {
+      // Generate QR code from ticketId
+      const qrCodeURL = await this.generateQRCode();
 
-    const html = pug.renderFile(
-      `${__dirname}/../views/emails/${template}.pug`,
-      {
-        firstName: this.firstName,
-        url: this.url,
-        amount: this.amount,
-        date: this.date,
-        title: this.title,
-        listingDescription: this.listingDescription,
-        qrCodeURL,
-        channelLink: this.channelLink, // Ensure this is correctly passed
+      const html = pug.renderFile(
+        `${__dirname}/../views/emails/${template}.pug`,
+        {
+          firstName: this.firstName,
+          ticketId: this.ticketId,
+          amount: this.amount,
+          date: this.date,
+          title: this.title,
+          listingDescription: this.listingDescription,
+          qrCodeURL,
+          channelLink: this.channelLink,
+          subject,
+        }
+      );
+
+      const mailOptions = {
+        from: this.from,
+        to: this.to,
         subject,
-      }
-    );
+        html,
+        text: htmlToText.fromString(html),
+      };
 
-    const mailOptions = {
-      from: this.from,
-      to: this.to,
-      subject,
-      html,
-      text: htmlToText.fromString(html),
-    };
-
-    await this.newTransport().sendMail(mailOptions);
+      await this.newTransport().sendMail(mailOptions);
+    } catch (error) {
+      console.error("Error sending email:", error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
   }
+
+  async classTicket() {
+    await this.send("classTicket", "Your Class Ticket");
+  }
+
 
   async sendWelcome() {
     await this.send("welcome", "Welcome to Infimuse");
@@ -169,5 +174,9 @@ module.exports = class Email {
   }
   async adminToken() {
     await this.send("adminToken", "Admin login Token");
+  }
+
+  async groupTicket() {
+    await this.send("groupTicket", "Group Ticket Purchase");
   }
 };

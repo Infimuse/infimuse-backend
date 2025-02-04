@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const Email = require("../utils/email");
 const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
-const callbackUrl = "http://localhost:8080/api/v1/package-tickets/verify";
+const callbackUrl = "http://localhost:8079/api/v1/package-tickets/verify";
 const TicketHolder = db.ticketHolders;
 const Customer = db.customers;
 const PackageTicket = db.packageTickets;
@@ -271,22 +271,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const channelLink = packageClass.channelLink;
     const qrCodeURL = ticket.ticketId;
 
-    new Email(
-      customer,
-      url,
-      null,
-      null,
-      null,
-      null,
-      qrCodeURL,
-      null,
-      channelLink
-    ).packageTicket();
-    await InfimuseAccount.create({
-      amount: amount / 100,
-      reference,
-      transactionType: "Booking",
-    });
+
 
     const hostId = packageClass.hostId;
 
@@ -356,6 +341,22 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
         VAT: vat,
       });
     }
+    const ticketId = ticket.ticketId;
+
+
+    const emailInstance= new Email(
+      customer,
+      ticketId, 
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      channelLink
+    )
+
+    await emailInstance.packageTicket();
 
     if (!communities) {
       return res.status(404).json({

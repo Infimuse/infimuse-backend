@@ -6,7 +6,7 @@ const qrcode = require("qrcode");
 const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
 const { where } = require("sequelize");
-const testCallbackUrl = "http://localhost:8080/api/v1/class-tickets/verify";
+const testCallbackUrl = "http://localhost:8079/api/v1/class-tickets/verify";
 const callbackUrl = "https://whatever.lat/api/v1/class-tickets/verify";
 const Community = db.communities;
 const TicketHolder = db.ticketHolders;
@@ -196,7 +196,6 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
     data,
   });
 });
-
 exports.verifyPayment = asyncWrapper(async (req, res) => {
   try {
     const reference = req.query.reference;
@@ -262,33 +261,17 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const ticket = await ClassTicket.findOne({
       where: { paymentReference: findTicket.reference },
     });
-
-    if (!ticket) {
-      throw new Error("Ticket not found");
-    }
-
-    const url = ticket.ticketId;
-    const classId = ticket.classSessionId;
+        const classId = ticket.classSessionId;
     const classSession = await ClassSession.findOne({ where: { id: classId } });
 
     if (!classSession) {
       throw new Error("Class session not found");
     }
 
-    const channelLink = classSession.channelLink;
-    const qrCodeURL = ticket.ticketId;
 
-    new Email(
-      customer,
-      url,
-      null,
-      null,
-      null,
-      null,
-      qrCodeURL,
-      null,
-      channelLink
-    ).classTicket();
+    if (!ticket) {
+      throw new Error("Ticket not found");
+    }
 
     await InfimuseAccount.create({
       amount: amount / 100,
@@ -359,6 +342,24 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       });
     }
 
+    const ticketId = ticket.ticketId;
+
+    const channelLink = classSession.channelLink;
+
+    const emailInstance= new Email(
+      customer,
+      ticketId, 
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      channelLink
+    )
+
+    await emailInstance.classTicket();
+
     const communities = await Community.findOne({
       where: { hostId },
     });
@@ -388,10 +389,10 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       data: payment,
     });
   } catch (error) {
+    console.log(error)
     return res.status(500).json({ error: error.message });
   }
 });
-
 exports.ticketScan = async (req, res) => {
   const qrcode = req.body.qrcode;
   const classId = req.params.classId;
@@ -482,36 +483,48 @@ exports.ticketScan = async (req, res) => {
     },
   });
 };
-
 exports.createGroupTicket = async (req, res) => {
-  const email = req.body.email;
-  const groupNumber = req.body.groupNumber;
-  const phone = req.body.phone;
-  const classSessionId = req.body.classSessionId;
-  const firstName = req.body.firstName;
-  const customerId = req.body.customerId;
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
-  if (!email || !groupNumber || !phone) {
-    return res.status(403).json({ error: "fill in the required entities" });
-  }
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const customerId = decodedToken.id;
+    const customer = await Customer.findOne({ where: { id: customerId } });
 
-  const classSession = await ClassSession.findOne({
-    where: { id: classSessionId },
-  });
-  if (!classSession) {
-    return res.status(403).json({ error: "Class not found" });
-  }
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
 
-  if (groupNumber === !2 || !4) {
-    return res.status(403).json({ error: "only group of 2 or 4 allowed" });
-  }
-  if (groupNumber === 2) {
+    const email = customer.email;
+    const groupNumber = req.body.groupNumber;
+    const phone = customer.phoneNumber;
+    const classSessionId = req.body.classSessionId;
+    const firstName = customer.firstName;
+
+
+    const classSession = await ClassSession.findOne({
+      where: { id: classSessionId },
+    });
+    if (!classSession) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    if (![2, 4].includes(groupNumber)) {
+      return res
+        .status(400)
+        .json({ error: "Only groups of 2 or 4 are allowed" });
+    }
+
+    // Calculate price and payment details
     const price = classSession.price * groupNumber;
-    console.log(`price ${price}`);
-    const groupComission = (group2discount / 100) * price;
-    console.log(`groupComission ${groupComission}`);
-    const toBePaid = price - groupComission;
-    console.log(`toBePaid ${toBePaid}`);
+    const groupDiscount =
+      groupNumber === 2
+        ? (group2discount / 100) * price
+        : (group4discount / 100) * price;
+    const toBePaid = price - groupDiscount;
 
     const paymentDetails = {
       amount: toBePaid,
@@ -524,104 +537,49 @@ exports.createGroupTicket = async (req, res) => {
       },
     };
 
+    // Handle guest creation for non-registered users
+    let guestId = null;
     if (!customerId) {
-      const guest = await Guest.findOrCreate({
+      const [guest, created] = await Guest.findOrCreate({
         where: { email },
         defaults: { email, phone, firstName },
       });
-      const getGuest = await Guest.findOne({ where: { email } });
-      if (!guest) {
-        return res.status(500).json({
-          error: "Guest could not be created, internal server error",
-        });
+      guestId = guest.id;
+      if (created) {
+        new Email(guest).guestWelcome();
       }
-
-      new Email(getGuest).guestWelcome();
-      const data = await paystackApi.initializePayment(paymentDetails);
-      const docHolder = await TicketHolder.create({
-        classSessionId,
-        reference: data.reference,
-        groupNumber,
-        guestId: guest.id,
-        groupTicket: true,
-      });
-
-      return res.status(200).json({
-        message: "Payment initialized successfully",
-        data,
-      });
     }
-    const data = await paystackApi.initializePayment(paymentDetails);
-    const docHolder = await TicketHolder.create({
-      classSessionId,
-      reference: data.reference,
-      groupNumber,
-      customerId,
-      groupTicket: true,
-    });
+
+    // Initialize payment
+    const paymentData = await paystackApi.initializePayment(paymentDetails);
+
+    // Create group tickets in the database
+    const tickets = [];
+    for (let i = 0; i < groupNumber; i++) {
+      const ticket = await TicketHolder.create({
+        classSessionId,
+        reference: paymentData.reference,
+        groupNumber,
+        groupTicket: true,
+        customerId: customerId || null,
+        guestId: guestId || null,
+      });
+      tickets.push(ticket);
+    }
+
+    // Send tickets to customer via email
+    await new Email(customer, tickets).groupTicket();
 
     return res.status(200).json({
-      message: "Payment initialized successfully",
-      data,
+      message: "Payment initialized successfully and tickets sent",
+      data: paymentData,
     });
-  } else if (groupNumber === 4) {
-    const price = classSession.price * groupNumber;
-    const groupComission = group4discount * price;
-    const toBePaid = (price - groupComission) * 100;
-
-    const paymentDetails = {
-      amount: toBePaid,
-      email,
-      callback_url: testCallbackUrl,
-      metadata: {
-        amount,
-        email,
-        name: firstName,
-      },
-    };
-
-    if (!customerId) {
-      const guest = await Guest.findOrCreate({
-        where: { email },
-        defaults: { email, phone, firstName },
-      });
-      const getGuest = await Guest.findOne({ where: { email } });
-      if (!guest) {
-        return res.status(500).json({
-          error: "Guest could not be created, internal server error",
-        });
-      }
-
-      new Email(getGuest).guestWelcome();
-      const data = await paystackApi.initializePayment(paymentDetails);
-      const docHolder = await TicketHolder.create({
-        classSessionId,
-        reference: data.reference,
-        groupNumber,
-        guestId: guest.id,
-        groupTicket: true,
-      });
-
-      return res.status(200).json({
-        message: "Payment initialized successfully",
-        data,
-      });
-    }
-    const data = await paystackApi.initializePayment(paymentDetails);
-    const docHolder = await TicketHolder.create({
-      classSessionId,
-      reference: data.reference,
-      groupNumber,
-      customerId,
-      groupTicket: true,
-    });
-
-    return res.status(200).json({
-      message: "Payment initialized successfully",
-      data,
-    });
+  } catch (error) {
+    console.error("Error creating group ticket:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 exports.createFreeClassTickets = async (req, res) => {
   try {

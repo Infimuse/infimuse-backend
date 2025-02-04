@@ -1,7 +1,6 @@
 const jwt = require("jsonwebtoken");
 const db = require("./../models");
 const bcrypt = require("bcryptjs");
-const Host = db.hosts;
 const { promisify } = require("util");
 const Email = require("../utils/email");
 const { url } = require("inspector");
@@ -10,12 +9,18 @@ const { Op } = require("sequelize");
 const compare = require("secure-compare");
 const moment = require("moment");
 const axios = require("axios");
+const Host = db.hosts;
+const SubAccount = db.subAccounts;
 const mattermostUrl = process.env.MATTERMOST_URL;
 const adminUsername = process.env.ADMIN_USERNAME;
 const adminPassword = process.env.ADMIN_PASSWORD;
 const Customer = db.customers;
 const channelLink = process.env.MATTERMOST_OVERALL_LINK;
-
+require('dotenv').config();
+const testKey = process.env.PAYSTACK_TEST_KEY;
+liveKey = process.env.PAYSTACK_LIVE_KEY;
+const Paystack = require('paystack-sdk').Paystack;
+const paystack = new Paystack(testKey);
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.EXPIRES_IN,
@@ -184,6 +189,60 @@ exports.hostLogin = async (req, res, next) => {
   }
   next();
 };
+exports.createHostSubAccount = async (req, res, next) => {
+  try {
+    const { account_number, bank_code, business_name } = req.body;
+    const token = req.headers.authorization.split(" ")[1];
+    
+    if (!token) {
+      return res.status(401).json({ error: "Please login" });
+    }
+    
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const hostId = decoded.id;
+
+    const host = await Host.findOne({ where: { id: hostId } });
+
+    if (!host) {
+      return res.status(404).json({ error: "Host not found" });
+    }
+    
+    const firstName = host.firstName;
+    const email = host.email;
+    const checkHostInSubAccount = await SubAccount.findOne({ where: { hostId } });
+    if (checkHostInSubAccount) {
+      return res.status(400).json({ error: "Host already has a subaccount" });
+    }
+  const subAccount = await paystack.subAccount.create({
+    business_name: business_name,
+    settlement_bank: bank_code,
+    account_number: account_number,
+    percentage_charge: process.env.PERCENTAGE_CHARGE,
+});
+
+    console.log('Paystack subaccount response:', subAccount);
+
+    
+    if (!subAccount || !subAccount.data) {
+      return res.status(400).json({ error: 'Failed to create Paystack subaccount', details: subAccount });
+    }
+
+    const newSubAccount = await SubAccount.create({
+      hostId: host.id,
+      firstName,
+      paystack_subaccount_code: subAccount.data.subaccount_code,
+      bank_account_number: account_number ,
+      bank_code: bank_code ,
+      business_name: business_name,
+      email: email
+    });
+
+    return res.status(201).json({ msg: "Subaccount created", newSubAccount });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ Error: error.message });
+  }
+}
 
 exports.hostProtect = async (req, res, next) => {
   try {

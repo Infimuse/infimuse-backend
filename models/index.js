@@ -39,7 +39,7 @@ const db = {};
 
 db.Sequelize = Sequelize;
 db.sequelize = sequelize;
-
+db.subAccounts = require("./subAccount")(sequelize, DataTypes);
 db.ratings = require("./rating")(sequelize, DataTypes);
 db.admins = require("./admin")(sequelize, DataTypes);
 db.classSessions = require("./classsession")(sequelize, DataTypes);
@@ -161,7 +161,8 @@ db.availabilities.belongsTo(db.hosts, {
   as: "host",
   foreignKey: "hostId",
 });
-
+db.hosts.hasOne(db.subAccounts, { as: "subAccount", foreignKey: "hostId" });
+db.subAccounts.belongsTo(db.hosts, { as: "host", foreignKey: "hostId" });
 db.hosts.hasMany(db.sessionVenues, {
   as: "sessionVenue",
   foreignKey: "hostId",

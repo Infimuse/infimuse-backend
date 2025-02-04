@@ -20,6 +20,8 @@ router.post("/forgotPassword", hostAuth.forgotPassword);
 router.put("/resetPassword/:token", hostAuth.resetPassword);
 router.post("/google-email", hostAuth.checkHostEmail);
 
+//create subAccount
+router.post("/subAccount", hostAuth.createHostSubAccount);
 // assign templates
 router.route("/workshops").post(assignListing.inviteStaffToWorkshop);
 router.route("/classSessions").post(assignListing.inviteStaffToClassSession);

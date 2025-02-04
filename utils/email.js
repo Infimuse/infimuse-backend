@@ -4,7 +4,13 @@ const htmlToText = require("html-to-text");
 const QRCode = require("qrcode");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
-const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
+const blobServiceClient = process.env.AZURE_STORAGE_CONNECTION_STRING 
+  ? BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING)
+  : null;
+
+if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
+  console.error('Azure Storage connection string is not defined in environment variables');
+}
 
 module.exports = class Email {
   constructor(

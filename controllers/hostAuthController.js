@@ -18,7 +18,7 @@ const Customer = db.customers;
 const channelLink = process.env.MATTERMOST_OVERALL_LINK;
 require('dotenv').config();
 const testKey = process.env.PAYSTACK_TEST_KEY;
-liveKey = process.env.PAYSTACK_LIVE_KEY;
+const liveKey = process.env.PAYSTACK_LIVE_KEY;
 const Paystack = require('paystack-sdk').Paystack;
 const paystack = new Paystack(testKey);
 const signToken = (id) => {

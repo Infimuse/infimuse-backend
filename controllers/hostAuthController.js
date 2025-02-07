@@ -68,6 +68,7 @@ exports.hostSignup = async (req, res, next) => {
 
     const newHost = await Host.create({
       firstName,
+      lastName,
       bio,
       imageUrl1,
       imageUrl2,
@@ -83,7 +84,6 @@ exports.hostSignup = async (req, res, next) => {
       role,
       experienceYears,
       resetPassword,
-      lastName,
     });
 
     const token = signToken(newHost.id);

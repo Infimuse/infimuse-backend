@@ -80,12 +80,10 @@ module.exports = class Email {
 
         return blockBlobClient.url;
       } else {
-        console.warn("Azure Blob Storage is not available, skipping upload.");
-        return qrCodeDataURL; // Return the QR code URL as data URI if Azure is not available
+        return qrCodeDataURL;
       }
     } catch (err) {
-      console.error("Error generating QR code:", err);
-      throw new Error(`Failed to generate QR code: ${err.message}`);
+      console.error("Error generating QR code");
     }
   }
 

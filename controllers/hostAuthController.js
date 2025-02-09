@@ -219,9 +219,6 @@ exports.createHostSubAccount = async (req, res, next) => {
     account_number: account_number,
     percentage_charge: process.env.PERCENTAGE_CHARGE,
 });
-
-    console.log('Paystack subaccount response:', subAccount);
-
     
     if (!subAccount || !subAccount.data) {
       return res.status(400).json({ error: 'Failed to create Paystack subaccount', details: subAccount });
@@ -236,6 +233,7 @@ exports.createHostSubAccount = async (req, res, next) => {
       business_name: business_name,
       email: email
     });
+    // await host.update({ subAccount: true });
 
     return res.status(201).json({ msg: "Subaccount created", newSubAccount });
   } catch (error) {

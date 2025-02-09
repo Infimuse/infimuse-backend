@@ -16,10 +16,10 @@ const adminUsername = process.env.ADMIN_USERNAME;
 const adminPassword = process.env.ADMIN_PASSWORD;
 const Customer = db.customers;
 const channelLink = process.env.MATTERMOST_OVERALL_LINK;
-require('dotenv').config();
+require("dotenv").config();
 const testKey = process.env.PAYSTACK_TEST_KEY;
 const liveKey = process.env.PAYSTACK_LIVE_KEY;
-const Paystack = require('paystack-sdk').Paystack;
+const Paystack = require("paystack-sdk").Paystack;
 const paystack = new Paystack(testKey);
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -44,6 +44,7 @@ exports.hostSignup = async (req, res, next) => {
   try {
     const email = req.body.email;
     const firstName = req.body.firstName;
+    const lastName = req.body.lastName;
     const bio = req.body.bio;
     const imageUrl1 = req.body.imageUrl1;
     const imageUrl2 = req.body.imageUrl2;
@@ -67,6 +68,7 @@ exports.hostSignup = async (req, res, next) => {
 
     const newHost = await Host.create({
       firstName,
+      lastName,
       bio,
       imageUrl1,
       imageUrl2,
@@ -173,15 +175,13 @@ exports.hostLogin = async (req, res, next) => {
       }
 
       const token = signToken(host.id);
-      return res
-        .status(200)
-        .json({
-          msg: "Logged in",
-          token,
-          name: host.firstName,
-          email: host.email,
-          phone: host.phone,
-        });
+      return res.status(200).json({
+        msg: "Logged in",
+        token,
+        name: host.firstName,
+        email: host.email,
+        phone: host.phone,
+      });
     }
   } catch (error) {
     console.log(error);
@@ -193,11 +193,11 @@ exports.createHostSubAccount = async (req, res, next) => {
   try {
     const { account_number, bank_code, business_name } = req.body;
     const token = req.headers.authorization.split(" ")[1];
-    
+
     if (!token) {
       return res.status(401).json({ error: "Please login" });
     }
-    
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const hostId = decoded.id;
 
@@ -206,32 +206,39 @@ exports.createHostSubAccount = async (req, res, next) => {
     if (!host) {
       return res.status(404).json({ error: "Host not found" });
     }
-    
+
     const firstName = host.firstName;
     const email = host.email;
-    const checkHostInSubAccount = await SubAccount.findOne({ where: { hostId } });
+    const checkHostInSubAccount = await SubAccount.findOne({
+      where: { hostId },
+    });
     if (checkHostInSubAccount) {
       return res.status(400).json({ error: "Host already has a subaccount" });
     }
-  const subAccount = await paystack.subAccount.create({
-    business_name: business_name,
-    settlement_bank: bank_code,
-    account_number: account_number,
-    percentage_charge: process.env.PERCENTAGE_CHARGE,
-});
-    
+    const subAccount = await paystack.subAccount.create({
+      business_name: business_name,
+      settlement_bank: bank_code,
+      account_number: account_number,
+      percentage_charge: process.env.PERCENTAGE_CHARGE,
+    });
+
+    console.log("Paystack subaccount response:", subAccount);
+
     if (!subAccount || !subAccount.data) {
-      return res.status(400).json({ error: 'Failed to create Paystack subaccount', details: subAccount });
+      return res.status(400).json({
+        error: "Failed to create Paystack subaccount",
+        details: subAccount,
+      });
     }
 
     const newSubAccount = await SubAccount.create({
       hostId: host.id,
       firstName,
       paystack_subaccount_code: subAccount.data.subaccount_code,
-      bank_account_number: account_number ,
-      bank_code: bank_code ,
+      bank_account_number: account_number,
+      bank_code: bank_code,
       business_name: business_name,
-      email: email
+      email: email,
     });
     // await host.update({ subAccount: true });
 
@@ -240,7 +247,7 @@ exports.createHostSubAccount = async (req, res, next) => {
     console.log(error);
     return res.status(500).json({ Error: error.message });
   }
-}
+};
 
 exports.hostProtect = async (req, res, next) => {
   try {

@@ -7,12 +7,14 @@ module.exports = (sequelize, DataTypes) => {
     "host",
     {
       firstName: DataTypes.STRING,
+      lastName: DataTypes.STRING,
       bio: DataTypes.STRING,
       imageUrl1: DataTypes.TEXT,
       imageUrl2: DataTypes.TEXT,
       imageUrl3: DataTypes.TEXT,
       qualifications: DataTypes.STRING,
       verified: { type: DataTypes.BOOLEAN, defaultValue: false },
+      haveAccount: { type: DataTypes.BOOLEAN, defaultValue: false },
       rating: {
         type: DataTypes.FLOAT,
         defaultValue: 0,

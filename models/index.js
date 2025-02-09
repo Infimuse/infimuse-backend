@@ -34,7 +34,6 @@ sequelize
   .then(() => console.log("Connected to Azure MySQL successfully!"))
   .catch((err) => console.error("Error connecting to Azure MySQL:", err));
 
-
 const db = {};
 
 db.Sequelize = Sequelize;

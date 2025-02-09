@@ -4,12 +4,16 @@ const htmlToText = require("html-to-text");
 const QRCode = require("qrcode");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
-const blobServiceClient = process.env.AZURE_STORAGE_CONNECTION_STRING 
-  ? BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING)
-  : null;
+let blobServiceClient = null;
 
-if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {
-  console.error('Azure Storage connection string is not defined in environment variables');
+if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
+  blobServiceClient = BlobServiceClient.fromConnectionString(
+    process.env.AZURE_STORAGE_CONNECTION_STRING
+  );
+} else {
+  console.warn(
+    "Azure Storage connection string is not defined in environment variables"
+  );
 }
 
 module.exports = class Email {
@@ -54,29 +58,32 @@ module.exports = class Email {
       // Generate QR code with the ticketId
       const qrCodeDataURL = await QRCode.toDataURL(this.ticketId);
 
-      const ContainerClient = blobServiceClient.getContainerClient("qrcodes");
+      if (blobServiceClient) {
+        const ContainerClient = blobServiceClient.getContainerClient("qrcodes");
 
-      await ContainerClient.createIfNotExists({
-        access: "blob",
-      });
-      
-      const blobName = `qrcode-${this.ticketId}-${Date.now()}.png`;
-      const blockBlobClient = ContainerClient.getBlockBlobClient(blobName);
-      
-      // Upload to Azure Blob Storage
-      const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
+        await ContainerClient.createIfNotExists({
+          access: "blob",
+        });
 
-      await blockBlobClient.upload(buffer, buffer.length, {
-        blobHTTPHeaders: {
-          blobContentType: "image/png",
-          blobContentEncoding: "base64",
-        },
-      });
+        const blobName = `qrcode-${this.ticketId}-${Date.now()}.png`;
+        const blockBlobClient = ContainerClient.getBlockBlobClient(blobName);
 
-      return blockBlobClient.url;
+        // Upload to Azure Blob Storage
+        const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
+
+        await blockBlobClient.upload(buffer, buffer.length, {
+          blobHTTPHeaders: {
+            blobContentType: "image/png",
+            blobContentEncoding: "base64",
+          },
+        });
+
+        return blockBlobClient.url;
+      } else {
+        return qrCodeDataURL;
+      }
     } catch (err) {
-      console.error("Error generating QR code:", err);
-      throw new Error(`Failed to generate QR code: ${err.message}`);
+      console.error("Error generating QR code");
     }
   }
 
@@ -118,7 +125,6 @@ module.exports = class Email {
   async classTicket() {
     await this.send("classTicket", "Your Class Ticket");
   }
-
 
   async sendWelcome() {
     await this.send("welcome", "Welcome to Infimuse");

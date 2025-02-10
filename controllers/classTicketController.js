@@ -16,6 +16,7 @@ const ClassSession = db.classSessions;
 const PaymentTransaction = db.paymentTransactions;
 const CancelTicket = db.cancelTickets;
 const Host = db.hosts;
+const Subaccount = db.subAccounts;
 const HostPlan = db.hostPlans;
 const Guest = db.guests;
 const Waitlist = db.waitlists;
@@ -140,50 +141,78 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
     });
   }
   const hostId = classSession.hostId;
-  const sessionAmount = classSession.price * 100;
-  const toBeTaxed = sessionAmount * 1.5;
-  const tax = Math.ceil(toBeTaxed / 100);
-  const amount = sessionAmount + tax;
-  const name = customer.firstName;
-  const email = customer.email;
-  const capacity = classSession.capacity;
-  const ticketsBought = classSession.boughtTickets;
+  
+  const hostSubaccount = await Subaccount.findOne({
+    where: { hostId }
+  });
 
-  if (ticketsBought === capacity) {
-    await classSession.update({ fullCapacity: true });
-    const checkWaitlist = await Waitlist.findOne({
-      where: {
-        customerId: customer.id,
-        classSessionId,
-      },
-    });
-
-    if (checkWaitlist) {
-      return res.status(403).json({ error: "already in the waitlist" });
-    }
-    await Waitlist.create({
-      name,
-      email,
-      classSessionId,
-      customerId: customer.id,
-    });
-    return res.status(403).json({
-      error: "Full capacity reached, we've added you to the waitlist",
+  if (!hostSubaccount) {
+    return res.status(400).json({ 
+      error: "Host has not set up a Paystack subaccount" 
     });
   }
 
+  // Calculate base amount and DST tax
+  const sessionAmount = classSession.price * 100;
+  const toBeTaxed = sessionAmount * 1.5;
+  const tax = Math.ceil(toBeTaxed / 100);
+  const totalAmount = sessionAmount + tax;
+  const name = customer.firstName;
+  const email = customer.email;
+
+  // Get host's plan and commission rate
+  const hostPlan = await HostPlan.findOne({
+    where: { hostId }
+  });
+
+  let commissionPercentage;
+  switch(hostPlan.subscription) {
+    case "freePlan":
+      commissionPercentage = 8;
+      break;
+    case "growth":
+      commissionPercentage = 5;
+      break;
+    case "professional":
+      commissionPercentage = 2.9;
+      break;
+    default:
+      commissionPercentage = 8; // Default to highest rate
+  }
+
+  // Calculate amounts after DST tax
+  const amountAfterTax = sessionAmount;
+  const hostShare = Math.floor((100 - commissionPercentage) * 100) / 100; // Convert to percentage for split
+
   const paymentDetails = {
-    amount,
+    amount: totalAmount,
     email,
     callback_url: testCallbackUrl,
     metadata: {
-      amount,
+      amount: totalAmount,
+      sessionAmount,
+      tax,
       email,
       name,
+      hostId,
+      commissionPercentage,
+      hostPlanType: hostPlan.subscription
     },
+    split: {
+      type: "percentage",
+      bearer_type: "account", 
+  
+      subaccounts: [
+        {
+          subaccount: hostSubaccount.paystack_subaccount_code,
+          share: hostShare
+        }
+      ]
+    }
   };
 
   const data = await paystackApi.initializePayment(paymentDetails);
+  
   const docHolder = await TicketHolder.create({
     classSessionId,
     customerId: id,
@@ -205,7 +234,16 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     }
     const {
       data: {
-        metadata: { email, amount, name },
+        metadata: { 
+          email, 
+          amount, 
+          sessionAmount, // Original class session amount
+          tax, // DST tax amount
+          name,
+          hostId,
+          commissionPercentage,
+          hostPlanType
+        },
         reference: paymentReference,
         status: transactionStatus,
       },
@@ -216,9 +254,18 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     }
 
     const actualAmount = amount / 100;
+    const sessionActualAmount = sessionAmount / 100;
+    const actualTax = tax / 100;
+
+    // Create the class ticket
     const [payment, created] = await ClassTicket.findOrCreate({
       where: { paymentReference },
-      defaults: { amount: actualAmount, email, name, paymentReference },
+      defaults: { 
+        amount: sessionActualAmount, // Store original session amount
+        email, 
+        name, 
+        paymentReference 
+      },
     });
 
     if (!created) {
@@ -230,11 +277,10 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     });
 
     if (!findTicket) {
-      return res
-        .status(404)
-        .json({ error: "Ticket not found in the ticket holder" });
+      return res.status(404).json({ error: "Ticket not found in the ticket holder" });
     }
 
+    // Update ticket with session details
     const updatedTicket = await ClassTicket.update(
       {
         hostId: findTicket.hostId,
@@ -261,92 +307,60 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const ticket = await ClassTicket.findOne({
       where: { paymentReference: findTicket.reference },
     });
-        const classId = ticket.classSessionId;
+
+    const classId = ticket.classSessionId;
     const classSession = await ClassSession.findOne({ where: { id: classId } });
 
     if (!classSession) {
       throw new Error("Class session not found");
     }
 
-
     if (!ticket) {
       throw new Error("Ticket not found");
     }
 
+    // Create platform account record
     await InfimuseAccount.create({
-      amount: amount / 100,
+      amount: actualAmount,
       reference,
       transactionType: "Booking",
     });
-    const hostId = classSession.hostId;
+
+    // Update class session details
     const tickets = classSession.boughtTickets + 1;
-    await classSession.update({ boughtTickets: tickets });
+    await classSession.update({ 
+      boughtTickets: tickets,
+      listingWorth: classSession.price * tickets
+    });
+
+    // Remove from ticket holder
     await findTicket.destroy();
 
-    await classSession.update({
-      listingWorth: classSession.price * tickets,
-    });
-    const toBeTaxed = actualAmount * 1.5;
-    const tax = toBeTaxed / 100;
-    const date = Date.now();
+    // Record DST
     await DST.create({
       hostId,
-      amount: tax,
-      date,
+      amount: actualTax,
+      date: Date.now(),
     });
 
-    const ticketAmount = actualAmount - tax;
-
-    const hostPlan = await HostPlan.findOne({
-      where: { hostId },
+    // Calculate and record commission
+    const commission = (commissionPercentage * sessionActualAmount) / 100;
+    const vat = 0.16 * commission;
+    
+    await Commission.create({
+      amount: commission,
+      reference: ticket.paymentReference,
+      comissionType: "bookingFee",
+      customerId: customer.id,
+      hostId: hostId,
+      VAT: vat,
     });
-    let commissionPercentage;
-    if (hostPlan.subscription === "freePlan") {
-      commissionPercentage = 8;
-      const commission = (commissionPercentage * ticketAmount) / 100;
-      await ticket.update({ amount: ticketAmount - commission });
-      const vat = 0.16 * commission;
-      await Commission.create({
-        amount: commission,
-        reference: ticket.paymentReference,
-        comissionType: "bookingFee",
-        customerId: customer.id,
-        hostId: hostId,
-        VAT: vat,
-      });
-    } else if (hostPlan.subscription === "growth") {
-      commissionPercentage = 5;
-      const commission = (commissionPercentage * ticketAmount) / 100;
-      await ticket.update({ amount: ticketAmount - commission });
-      const vat = 0.16 * commission;
-      await Commission.create({
-        amount: commission,
-        reference: ticket.paymentReference,
-        comissionType: "bookingFee",
-        customerId: customer.id,
-        hostId: hostId,
-        VAT: vat,
-      });
-    } else if (hostPlan.subscription === "professional") {
-      commissionPercentage = 2.9;
-      const commission = (commissionPercentage * ticketAmount) / 100;
-      await ticket.update({ amount: ticketAmount - commission });
-      const vat = 0.16 * commission;
-      await Commission.create({
-        amount: commission,
-        reference: ticket.paymentReference,
-        comissionType: "bookingFee",
-        customerId: customer.id,
-        hostId: hostId,
-        VAT: vat,
-      });
-    }
 
+    // Send email with ticket details
     const ticketId = ticket.ticketId;
-
     const channelLink = classSession.channelLink;
 
-    const emailInstance= new Email(
+    const emailInstance = new Email(
       customer,
       ticketId, 
       null,
@@ -356,20 +370,22 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       null,
       null,
       channelLink
-    )
+    );
 
     await emailInstance.classTicket();
 
+    // Handle community membership
     const communities = await Community.findOne({
       where: { hostId },
     });
+
     if (!communities) {
       return res.status(404).json({
-        error:
-          "Ticket sent to your email but the host has not created a community yet we'll notify you when they do",
+        error: "Ticket sent to your email but the host has not created a community yet we'll notify you when they do",
         data: payment,
       });
     }
+
     const existingMembership = await CommunityMembership.findOne({
       where: {
         communityId: communities.id,
@@ -389,7 +405,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       data: payment,
     });
   } catch (error) {
-    console.log(error)
+    console.log(error);
     return res.status(500).json({ error: error.message });
   }
 });
@@ -529,6 +545,7 @@ exports.createGroupTicket = async (req, res) => {
     const paymentDetails = {
       amount: toBePaid,
       email,
+      currency:"KES",
       callback_url: testCallbackUrl,
       metadata: {
         amount: toBePaid,

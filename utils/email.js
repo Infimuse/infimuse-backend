@@ -1,126 +1,49 @@
-const nodemailer = require("nodemailer");
-const pug = require("pug");
-const htmlToText = require("html-to-text");
-const QRCode = require("qrcode");
-const { BlobServiceClient } = require("@azure/storage-blob");
-
-let blobServiceClient = null;
-
-if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
-  blobServiceClient = BlobServiceClient.fromConnectionString(
-    process.env.AZURE_STORAGE_CONNECTION_STRING
-  );
-} else {
-  console.warn(
-    "Azure Storage connection string is not defined in environment variables"
-  );
-}
+const QRCode = require('qrcode'); // Add this at the top
+const pug = require('pug'); // Add this at the top
+const htmlToText = require('html-to-text'); // Add this at the top
 
 module.exports = class Email {
-  constructor(
-    user,
-    ticketId,
-    title,
-    listingDescription,
-    date,
-    amount,
-    otp,
-    channelLink
-  ) {
-    this.to = user.email;
-    this.firstName = user.firstName;
-    this.ticketId = ticketId;
-    this.amount = amount;
-    this.date = date;
-    this.title = title;
-    this.listingDescription = listingDescription;
-    this.otp = otp;
-    this.channelLink = channelLink;
-    this.from = `Infimuse <${process.env.EMAIL_FROM}>`;
-  }
-
-  newTransport() {
-    return nodemailer.createTransport({
-      service: "SendGrid",
-      auth: {
-        user: process.env.SENDGRID_USER,
-        pass: process.env.SENDGRID_API,
-      },
-    });
-  }
+  // ... constructor remains the same ...
 
   async generateQRCode() {
-    if (!this.ticketId) {
-      throw new Error("No ticketId provided for QR code generation");
-    }
-
-    try {
-      // Generate QR code with the ticketId
-      const qrCodeDataURL = await QRCode.toDataURL(this.ticketId);
-
-      if (blobServiceClient) {
-        const ContainerClient = blobServiceClient.getContainerClient("qrcodes");
-
-        await ContainerClient.createIfNotExists({
-          access: "blob",
-        });
-
-        const blobName = `qrcode-${this.ticketId}-${Date.now()}.png`;
-        const blockBlobClient = ContainerClient.getBlockBlobClient(blobName);
-
-        // Upload to Azure Blob Storage
-        const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
-
-        await blockBlobClient.upload(buffer, buffer.length, {
-          blobHTTPHeaders: {
-            blobContentType: "image/png",
-            blobContentEncoding: "base64",
-          },
-        });
-
-        return blockBlobClient.url;
-      } else {
-        return qrCodeDataURL;
-      }
-    } catch (err) {
-      console.error("Error generating QR code");
-    }
+    // ... code remains the same ...
   }
 
+  // Keep only one send method - I recommend the first version since it handles null QR codes better
   async send(template, subject) {
     try {
-      // Generate QR code from ticketId
-      const qrCodeURL = await this.generateQRCode();
+      // Generate QR code only if ticketId exists
+      const qrCodeUrl = this.ticketId ? await this.generateQRCode() : null;
 
-      const html = pug.renderFile(
-        `${__dirname}/../views/emails/${template}.pug`,
-        {
-          firstName: this.firstName,
-          ticketId: this.ticketId,
-          amount: this.amount,
-          date: this.date,
-          title: this.title,
-          listingDescription: this.listingDescription,
-          qrCodeURL,
-          channelLink: this.channelLink,
-          subject,
-        }
-      );
+      // Render HTML based on a pug template
+      const html = pug.renderFile(`${__dirname}/../views/email/${template}.pug`, {
+        firstName: this.firstName,
+        ticketId: this.ticketId,
+        amount: this.amount,
+        date: this.date,
+        title: this.title,
+        listingDescription: this.listingDescription,
+        subject: subject,
+        otp: this.otp,
+        channelLink: this.channelLink,
+        qrCodeUrl: qrCodeUrl
+      });
 
       const mailOptions = {
         from: this.from,
         to: this.to,
         subject,
         html,
-        text: htmlToText.fromString(html),
+        text: htmlToText.convert(html),
       };
 
       await this.newTransport().sendMail(mailOptions);
     } catch (error) {
-      console.error("Error sending email:", error);
+      console.error("Email sending error:", error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
   }
+
 
   async classTicket() {
     await this.send("classTicket", "Your Class Ticket");

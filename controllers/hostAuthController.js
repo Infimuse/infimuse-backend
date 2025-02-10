@@ -20,7 +20,7 @@ require("dotenv").config();
 const testKey = process.env.PAYSTACK_TEST_KEY;
 const liveKey = process.env.PAYSTACK_LIVE_KEY;
 const Paystack = require("paystack-sdk").Paystack;
-const paystack = new Paystack(testKey);
+const paystack = new Paystack(liveKey);
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.EXPIRES_IN,
@@ -47,6 +47,7 @@ exports.hostSignup = async (req, res, next) => {
     const lastName = req.body.lastName;
     const bio = req.body.bio;
     const imageUrl1 = req.body.imageUrl1;
+    const displayName = req.body.displayName;
     const imageUrl2 = req.body.imageUrl2;
     const imageUrl3 = req.body.imageUrl3;
     const qualifications = req.body.qualifications;
@@ -74,6 +75,7 @@ exports.hostSignup = async (req, res, next) => {
       imageUrl2,
       imageUrl3,
       qualifications,
+      displayName,
       verified,
       hostTitle,
       nationalId,
@@ -181,6 +183,7 @@ exports.hostLogin = async (req, res, next) => {
         name: host.firstName,
         email: host.email,
         phone: host.phone,
+        displayName: host.displayName,  
       });
     }
   } catch (error) {
@@ -203,8 +206,13 @@ exports.createHostSubAccount = async (req, res, next) => {
 
     const host = await Host.findOne({ where: { id: hostId } });
 
+
     if (!host) {
       return res.status(404).json({ error: "Host not found" });
+    }
+    if (host.haveAccount === true) {
+      return res.status(400).json({ error: "Host already has a subaccount" });
+      
     }
 
     const firstName = host.firstName;
@@ -219,6 +227,7 @@ exports.createHostSubAccount = async (req, res, next) => {
       business_name: business_name,
       settlement_bank: bank_code,
       account_number: account_number,
+      currency: "KES",
       percentage_charge: process.env.PERCENTAGE_CHARGE,
     });
 
@@ -240,7 +249,7 @@ exports.createHostSubAccount = async (req, res, next) => {
       business_name: business_name,
       email: email,
     });
-    // await host.update({ subAccount: true });
+    await host.update({ haveAccount: true });
 
     return res.status(201).json({ msg: "Subaccount created", newSubAccount });
   } catch (error) {

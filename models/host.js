@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
       bio: DataTypes.STRING,
       imageUrl1: DataTypes.TEXT,
       imageUrl2: DataTypes.TEXT,
+      displayName:DataTypes.STRING,
       imageUrl3: DataTypes.TEXT,
       qualifications: DataTypes.STRING,
       verified: { type: DataTypes.BOOLEAN, defaultValue: false },

@@ -20,7 +20,7 @@ require("dotenv").config();
 const testKey = process.env.PAYSTACK_TEST_KEY;
 const liveKey = process.env.PAYSTACK_LIVE_KEY;
 const Paystack = require("paystack-sdk").Paystack;
-const paystack = new Paystack(liveKey);
+const paystack = new Paystack(testKey);
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.EXPIRES_IN,
@@ -183,7 +183,7 @@ exports.hostLogin = async (req, res, next) => {
         name: host.firstName,
         email: host.email,
         phone: host.phone,
-        displayName: host.displayName,  
+        displayName
       });
     }
   } catch (error) {

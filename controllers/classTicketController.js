@@ -363,15 +363,15 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const emailInstance = new Email(
       customer,
       ticketId, 
+      classSession.title,
+      classSession.description,
+      classSession.startDate,
+      sessionActualAmount,
       null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      ticketId,
       channelLink
     );
-
+    
     await emailInstance.classTicket();
 
     // Handle community membership
@@ -399,7 +399,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
         customerId: findTicket.customerId,
       });
     }
-
+console.log(ticketId)
     return res.status(200).json({
       message: "Payment verified",
       data: payment,

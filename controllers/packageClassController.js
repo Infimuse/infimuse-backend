@@ -15,6 +15,7 @@ const PackageTicket = db.packageTickets;
 const Comment = db.comments;
 const Location = db.locations;
 const Host = db.hosts;
+const SubAccount = db.subAccounts;
 const Rating = db.ratings;
 const PaymentTransaction = db.paymentTransactions;
 const CancelTicket = db.cancelTickets;
@@ -88,6 +89,10 @@ exports.createPackageClass = async (req, res, next) => {
 
   const decodedToken = jwt.verify(token, jwtSecret);
   const hostId = decodedToken.id;
+  const subAccount =  await SubAccount.findOne({where: {hostId}});
+    if (!subAccount) {
+      return res.status(401).json({ error: "please create a subAccount" });
+    }
   try {
     const doc = await PackageClass.create({
       title: req.body.title,

@@ -10,6 +10,7 @@ const Host = db.hosts;
 const PackageClass = db.packageClasses;
 const jwt = require("jsonwebtoken");
 const secretKey = process.env.JWT_SECRET;
+const SubAccount = db.subAccounts;
 
 exports.getAllPackageSessions = factory.getAllDocs(PackageSession);
 exports.getWithin = factory.getWithin(PackageSession);
@@ -47,7 +48,10 @@ exports.createPackageSession = async (req, res, next) => {
 
   const decodedToken = jwt.verify(token, secretKey);
   const hostId = decodedToken.id;
-
+  const subAccount =  await SubAccount.findOne({where: {hostId}});
+    if (!subAccount) {
+      return res.status(401).json({ error: "please create a subAccount" });
+    }
   try {
     const {
       title,

@@ -5,32 +5,39 @@ const QRCode = require("qrcode");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
 let blobServiceClient = null;
-
-if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
-  blobServiceClient = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
-} else {
-  console.warn('Azure Storage connection string is not defined in environment variables');
+try {
+  if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
+    blobServiceClient = BlobServiceClient.fromConnectionString(
+      process.env.AZURE_STORAGE_CONNECTION_STRING
+    );
+  } else {
+    console.warn('Azure Storage connection string is not defined in environment variables');
+  }
+} catch (error) {
+  console.error('Error initializing Azure Blob Storage:', error);
 }
 
 module.exports = class Email {
   constructor(
     user,
-    ticketId = null, // Make ticketId optional with default null
+    url,
     title,
     listingDescription,
     date,
     amount,
     otp,
+    qrCodeURL,
     channelLink
   ) {
     this.to = user.email;
     this.firstName = user.firstName;
-    this.ticketId = ticketId;
+    this.url = url;
     this.amount = amount;
     this.date = date;
     this.title = title;
     this.listingDescription = listingDescription;
     this.otp = otp;
+    this.qrCodeURL = qrCodeURL;
     this.channelLink = channelLink;
     this.from = `Infimuse <${process.env.EMAIL_FROM}>`;
   }
@@ -45,84 +52,79 @@ module.exports = class Email {
     });
   }
 
-  async generateQRCode() {
-    // If no ticketId, return null instead of throwing an error
-    if (!this.ticketId) {
-      return null;
+  async generateQRCode(text) {
+    if (typeof text !== "string") {
+      throw new Error("QR code text must be a string");
     }
 
     try {
-      // Generate QR code with the ticketId
-      const qrCodeDataURL = await QRCode.toDataURL(this.ticketId);
-
-      if (blobServiceClient) {
-        const ContainerClient = blobServiceClient.getContainerClient("qrcodes");
-
-        await ContainerClient.createIfNotExists({
-          access: "blob",
-        });
-
-        const blobName = `qrcode-${this.ticketId}-${Date.now()}.png`;
-        const blockBlobClient = ContainerClient.getBlockBlobClient(blobName);
-
-        // Upload to Azure Blob Storage
-        const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
-
-        await blockBlobClient.upload(buffer, buffer.length, {
-          blobHTTPHeaders: {
-            blobContentType: "image/png",
-            blobContentEncoding: "base64",
-          },
-        });
-
-        return blockBlobClient.url;
-      } else {
-        console.warn('Azure Blob Storage is not available, skipping upload.');
-        return qrCodeDataURL; // Return the QR code URL as data URI if Azure is not available
+      const qrCodeDataURL = await QRCode.toDataURL(text);
+      
+      // If blob storage is not initialized, return the data URL
+      if (!blobServiceClient) {
+        console.warn('Azure Blob Storage not available, returning QR code as data URL');
+        return qrCodeDataURL;
       }
+
+      const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
+      
+      // Get container client and create if not exists
+      const containerClient = blobServiceClient.getContainerClient("qrcodes");
+      await containerClient.createIfNotExists({
+        access: "blob"
+      });
+
+      // Generate unique blob name
+      const blobName = `qrcodes/${Date.now()}.png`;
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+      // Upload to Blob Storage
+      await blockBlobClient.upload(buffer, buffer.length, {
+        blobHTTPHeaders: {
+          blobContentType: "image/png",
+          blobContentEncoding: "base64",
+        },
+      });
+
+      // Return the full URL to the uploaded blob
+      return blockBlobClient.url;
     } catch (err) {
       console.error("Error generating QR code:", err);
-      return null; // Return null instead of throwing an error
+      return null;
     }
   }
 
   async send(template, subject) {
-    try {
-      // Generate QR code only if ticketId exists, otherwise set to null
-      const qrCodeURL = this.ticketId ? await this.generateQRCode() : null;
-
-      const html = pug.renderFile(
-        `${__dirname}/../views/emails/${template}.pug`,
-        {
-          firstName: this.firstName,
-          ticketId: this.ticketId,
-          amount: this.amount,
-          date: this.date,
-          title: this.title,
-          listingDescription: this.listingDescription,
-          qrCodeURL, // This will be null if no ticketId
-          channelLink: this.channelLink,
-          subject,
-          otp: this.otp, // Added otp to the template context
-        }
-      );
-
-      const mailOptions = {
-        from: this.from,
-        to: this.to,
-        subject,
-        html,
-        text: htmlToText.fromString(html),
-      };
-
-      await this.newTransport().sendMail(mailOptions);
-    } catch (error) {
-      console.error("Error sending email:", error);
-      throw new Error(`Failed to send email: ${error.message}`);
+    let qrCodeURL = null;
+    if (this.url) {
+      qrCodeURL = await this.generateQRCode(this.url);
     }
+
+    const html = pug.renderFile(
+      `${__dirname}/../views/emails/${template}.pug`,
+      {
+        firstName: this.firstName,
+        url: this.url,
+        amount: this.amount,
+        date: this.date,
+        title: this.title,
+        listingDescription: this.listingDescription,
+        qrCodeURL,
+        channelLink: this.channelLink,
+        subject,
+      }
+    );
+
+    const mailOptions = {
+      from: this.from,
+      to: this.to,
+      subject,
+      html,
+      text: htmlToText.fromString(html),
+    };
+
+    await this.newTransport().sendMail(mailOptions);
   }
-
-
   async classTicket() {
     await this.send("classTicket", "Your Class Ticket");
   }

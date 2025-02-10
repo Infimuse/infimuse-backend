@@ -2,15 +2,45 @@ extends baseEmail
 
 block content
   p Hi #{firstName},
-  p Thank you for buying the class ticket,
-  p Below is the ticket, please keep it safe since it will be scanned at the gate and if it happens to be in use by another person, you will not be able to access the class.
-  p Ticket: 
-  if qrCodeURL
-    img(src=qrCodeURL alt='QR code' style='width:200px;height:200px;')
-  else
-    p No QR code available.
-  p See you then in your scheduled class.
-  p You can now join a group where the host will be sharing all the information via 
-  p #{channelLink} this link
-  p Thank you,
-  p - Akash Gahuri, CEO Infimuse
+  p Thank you for purchasing a ticket for #{title}. Here are your booking details:
+
+  //- Ticket Details Section
+  .ticket-container(style='background: #f9f9f9; border-radius: 10px; padding: 20px; margin: 20px 0;')
+    h2(style='color: #333; margin-bottom: 15px;') Booking Details
+    
+    //- Class Info
+    .class-info(style='margin-bottom: 20px;')
+      h3(style='color: #444; margin-bottom: 10px;') #{title}
+      p(style='color: #666; margin: 5px 0;') Start Date: #{date}
+      if endDate
+        p(style='color: #666; margin: 5px 0;') End Date: #{endDate}
+    
+    //- Payment Details
+    .payment-info(style='margin-bottom: 20px; border-top: 1px solid #eee; padding-top: 15px;')
+      h3(style='color: #444; margin-bottom: 10px;') Payment Summary
+      p(style='color: #666; margin: 5px 0;') Amount: KES #{amount}
+      p(style='color: #666; margin: 5px 0;') Tax (1.6%): KES #{(amount * 0.016).toFixed(2)}
+      p(style='font-weight: bold; color: #444; margin: 10px 0;') Total Paid: KES #{(amount * 1.016).toFixed(2)}
+
+    //- QR Code Section
+    .qr-code(style='text-align: center; margin: 20px 0;')
+      h3(style='color: #444; margin-bottom: 15px;') Your Entry Pass
+      if qrCodeURL
+        img(src=qrCodeURL alt='Entry QR Code' style='width: 200px; height: 200px;')
+      else
+        p(style='color: #666;') QR code will be generated shortly.
+
+  //- Channel Link
+  if channelLink
+    .channel-link(style='margin-top: 20px;')
+      p(style='margin-bottom: 10px;') Join the class channel to stay updated:
+      a(href=channelLink style='background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;') Join Channel
+
+  //- Important Notes
+  .notes(style='margin-top: 30px; padding: 15px; background: #fff3cd; border-radius: 5px;')
+    p(style='color: #856404; margin: 0;') 
+      strong Important: 
+      | This QR code is unique to you and will be scanned at entry. Please keep it safe and do not share it.
+
+  p Best regards,
+  p The Infimuse Team

@@ -183,7 +183,6 @@ exports.hostLogin = async (req, res, next) => {
         name: host.firstName,
         email: host.email,
         phone: host.phone,
-        displayName
       });
     }
   } catch (error) {

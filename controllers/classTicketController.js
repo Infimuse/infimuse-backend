@@ -154,9 +154,9 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
 
   // Calculate base amount and DST tax
   const sessionAmount = classSession.price * 100;
-  const toBeTaxed = sessionAmount * 1.5;
-  const tax = Math.ceil(toBeTaxed / 100);
-  const totalAmount = sessionAmount + tax;
+  const toBeTaxed = sessionAmount * 1;
+  const tax = toBeTaxed
+  const totalAmount = sessionAmount
   const name = customer.firstName;
   const email = customer.email;
 

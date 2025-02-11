@@ -4,18 +4,9 @@ const htmlToText = require("html-to-text");
 const QRCode = require("qrcode");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
-let blobServiceClient = null;
-try {
-  if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
-    blobServiceClient = BlobServiceClient.fromConnectionString(
-      process.env.AZURE_STORAGE_CONNECTION_STRING
-    );
-  } else {
-    console.warn('Azure Storage connection string is not defined in environment variables');
-  }
-} catch (error) {
-  console.error('Error initializing Azure Blob Storage:', error);
-}
+const blobServiceClient = BlobServiceClient.fromConnectionString(
+  process.env.AZURE_STORAGE_CONNECTION_STRING
+);
 
 module.exports = class Email {
   constructor(
@@ -59,35 +50,25 @@ module.exports = class Email {
 
     try {
       const qrCodeDataURL = await QRCode.toDataURL(text);
-      
-      // If blob storage is not initialized, return the data URL
-      if (!blobServiceClient) {
-        console.warn('Azure Blob Storage not available, returning QR code as data URL');
-        return qrCodeDataURL;
-      }
-
       const buffer = Buffer.from(qrCodeDataURL.split(",")[1], "base64");
-      
-      // Get container client and create if not exists
+
       const containerClient = blobServiceClient.getContainerClient("qrcodes");
       await containerClient.createIfNotExists({
         access: "blob"
       });
 
-      // Generate unique blob name
-      const blobName = `qrcodes/${Date.now()}.png`;
+      const blobName = `${Date.now()}.png`;
       const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
-      // Upload to Blob Storage
       await blockBlobClient.upload(buffer, buffer.length, {
         blobHTTPHeaders: {
           blobContentType: "image/png",
-          blobContentEncoding: "base64",
-        },
+          blobContentEncoding: "base64"
+        }
       });
 
-      // Return the full URL to the uploaded blob
-      return blockBlobClient.url;
+      const qrCodeURL = blockBlobClient.url;
+      return qrCodeURL;
     } catch (err) {
       console.error("Error generating QR code:", err);
       return null;

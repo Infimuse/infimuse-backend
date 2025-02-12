@@ -10,6 +10,7 @@ const callbackUrl = "https://whatever.lat/api/v1/class-sessions/ticket/verify";
 const paystackApi = require("../paystackApi");
 const crypto = require("crypto");
 const axios = require("axios");
+const subAccount = require("../models/subAccount");
 const TicketHolder = db.ticketHolders;
 const jwtSecret = process.env.JWT_SECRET;
 const ClassSession = db.classSessions;
@@ -20,6 +21,7 @@ const Comment = db.comments;
 const Customer = db.customers;
 const Host = db.hosts;
 const Rating = db.ratings;
+const SubAccount = db.subAccounts;
 const PaymentTransaction = db.paymentTransactions;
 const Room = db.rooms;
 const mattermostUrl = process.env.MATTERMOST_URL;
@@ -96,6 +98,10 @@ exports.createClassSession = async (req, res, next) => {
 
     const decodedToken = jwt.verify(token, jwtSecret);
     const hostId = decodedToken.id;
+    const subAccount =  await SubAccount.findOne({where: {hostId}});
+    if (!subAccount) {
+      return res.status(401).json({ error: "please create a subAccount" });
+    }
     // Create a new class session
     const doc = await ClassSession.create({
       title: req.body.title,
@@ -124,43 +130,44 @@ exports.createClassSession = async (req, res, next) => {
       "host"
     )}/api/v1/class-sessions/book/${classId}`;
 
-    try {
-      const uniqueChannelName = crypto
-        .randomBytes(2)
-        .toString("hex")
-        .toLowerCase();
-      const token = await getAuthToken();
-      const name = `${uniqueChannelName}-${doc.title}`;
-      const createMattermostGroup = await axios.post(
-        `${mattermostUrl}/channels`,
-        {
-          name,
-          display_name: doc.title,
-          team_id,
-          display_name: `${uniqueChannelName}-${doc.title}`,
-          header: doc.title,
-          type: "O",
-        },
+    return res.status(201).json({msg: "Class session created successfully", doc, bookingUrl: bookExperienceUrl});
+    // try {
+    //   const uniqueChannelName = crypto
+    //     .randomBytes(2)
+    //     .toString("hex")
+    //     .toLowerCase();
+    //   const token = await getAuthToken();
+    //   const name = `${uniqueChannelName}-${doc.title}`;
+    //   const createMattermostGroup = await axios.post(
+    //     `${mattermostUrl}/channels`,
+    //     {
+    //       name,
+    //       display_name: doc.title,
+    //       team_id,
+    //       display_name: `${uniqueChannelName}-${doc.title}`,
+    //       header: doc.title,
+    //       type: "O",
+    //     },
 
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const channelLink = `${chatRoomLink}/${name}`;
-      await doc.update({ channelLink });
+    //     {
+    //       headers: {
+    //         Authorization: `Bearer ${token}`,
+    //       },
+    //     }
+    //   );
+    //   const channelLink = `${chatRoomLink}/${name}`;
+    //   await doc.update({ channelLink });
 
-      return res.status(200).json({
-        status: "Document/channel created successfully",
-        bookingUrl: bookExperienceUrl,
-        chatRoomLink: channelLink,
-        doc,
-      });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).json({ error: "Internal server error" });
-    }
+    //   return res.status(200).json({
+    //     status: "Document/channel created successfully",
+    //     bookingUrl: bookExperienceUrl,
+    //     chatRoomLink: channelLink,
+    //     doc,
+    //   });
+    // } catch (error) {
+    //   console.log(error);
+    //   return res.status(500).json({ error: "Internal server error" });
+    // }
   } catch (err) {
     console.log(err);
     return res.status(500).json({ error: "Internal server error" });

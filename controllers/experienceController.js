@@ -20,6 +20,7 @@ const Host = db.hosts;
 const TicketHolder = db.ticketHolders;
 const Customer = db.customers;
 const Rating = db.ratings;
+const SubAccount = db.subAccounts;
 const PaymentTransaction = db.paymentTransactions;
 const jwtSecret = process.env.JWT_SECRET;
 const mattermostUrl = process.env.MATTERMOST_URL;
@@ -111,6 +112,11 @@ exports.createExperience = async (req, res, next) => {
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const hostId = decodedToken.id;
+
+    const subAccount =  await SubAccount.findOne({where: {hostId}});
+    if (!subAccount) {
+      return res.status(401).json({ error: "please create a subAccount" });
+    }
     if (!venueId) {
       return res.status(403).json({ error: "Please provide the venueId" });
     }

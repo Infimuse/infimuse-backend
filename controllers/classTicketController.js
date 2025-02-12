@@ -154,9 +154,9 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
 
   // Calculate base amount and DST tax
   const sessionAmount = classSession.price * 100;
-  const toBeTaxed = sessionAmount * 1.5;
-  const tax = Math.ceil(toBeTaxed / 100);
-  const totalAmount = sessionAmount + tax;
+  const toBeTaxed = sessionAmount * 1;
+  const tax = toBeTaxed
+  const totalAmount = sessionAmount
   const name = customer.firstName;
   const email = customer.email;
 
@@ -363,15 +363,15 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
     const emailInstance = new Email(
       customer,
       ticketId, 
+      classSession.title,
+      classSession.description,
+      classSession.startDate,
+      sessionActualAmount,
       null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      ticketId,
       channelLink
     );
-
+    
     await emailInstance.classTicket();
 
     // Handle community membership
@@ -399,7 +399,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
         customerId: findTicket.customerId,
       });
     }
-
+console.log(ticketId)
     return res.status(200).json({
       message: "Payment verified",
       data: payment,

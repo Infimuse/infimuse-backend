@@ -21,6 +21,7 @@ const CancelTicket = db.cancelTickets;
 const WorkshopTicket = db.workshopTickets;
 const PaymentTransaction = db.paymentTransactions;
 const TicketHolder = db.ticketHolders;
+const SubAccount = db.subAccounts;
 const app = express();
 const Customer = db.customers;
 const mattermostUrl = process.env.MATTERMOST_URL;
@@ -58,6 +59,10 @@ exports.createWorkshop = async (req, res, next) => {
 
   const decodedToken = jwt.verify(token, jwtSecret);
   const hostId = decodedToken.id;
+  const subAccount =  await SubAccount.findOne({where: {hostId}});
+    if (!subAccount) {
+      return res.status(401).json({ error: "please create a subAccount" });
+    }
   try {
     const doc = await Workshop.create({
       title: req.body.title,

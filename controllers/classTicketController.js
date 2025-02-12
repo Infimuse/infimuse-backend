@@ -3,15 +3,20 @@ const db = require("./../models");
 const Email = require("../utils/email");
 const jwt = require("jsonwebtoken");
 const qrcode = require("qrcode");
+const testKey = process.env.PAYSTACK_TEST_KEY;
+const liveKey = process.env.PAYSTACK_LIVE_KEY;
 const asyncWrapper = require("../asyncWrapper");
 const paystackApi = require("../paystackApi");
 const { where } = require("sequelize");
 const testCallbackUrl = "http://localhost:8079/api/v1/class-tickets/verify";
 const callbackUrl = "https://whatever.lat/api/v1/class-tickets/verify";
 const Community = db.communities;
+const Paystack = require("paystack-sdk").Paystack;
+const paystack = new Paystack(liveKey);
 const TicketHolder = db.ticketHolders;
 const ClassTicket = db.classTickets;
 const Customer = db.customers;
+const HostInvoice = db.hostinvoices;
 const ClassSession = db.classSessions;
 const PaymentTransaction = db.paymentTransactions;
 const CancelTicket = db.cancelTickets;
@@ -184,6 +189,20 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
   const amountAfterTax = sessionAmount;
   const hostShare = Math.floor((100 - commissionPercentage) * 100) / 100; // Convert to percentage for split
 
+  const split = await paystack.split.create({
+    name: "Host Commission Split",
+    type: "percentage",
+    currency: "KES",  // Change to your currency if needed
+    subaccounts: [
+      {
+        subaccount: hostSubaccount.paystack_subaccount_code,
+        share: hostShare
+      }
+    ],
+    bearer_type: "account"
+  });
+  console.log(`split: ${split}`);
+  
   const paymentDetails = {
     amount: totalAmount,
     email,
@@ -198,17 +217,7 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
       commissionPercentage,
       hostPlanType: hostPlan.subscription
     },
-    split: {
-      type: "percentage",
-      bearer_type: "account", 
-  
-      subaccounts: [
-        {
-          subaccount: hostSubaccount.paystack_subaccount_code,
-          share: hostShare
-        }
-      ]
-    }
+    split:split.data
   };
 
   const data = await paystackApi.initializePayment(paymentDetails);
@@ -242,10 +251,12 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
           name,
           hostId,
           commissionPercentage,
-          hostPlanType
+          hostPlanType,
+          split_data
         },
         reference: paymentReference,
         status: transactionStatus,
+        
       },
     } = await paystackApi.verifyPayment(reference);
 
@@ -345,7 +356,7 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
 
     // Calculate and record commission
     const commission = (commissionPercentage * sessionActualAmount) / 100;
-    const vat = 0.16 * commission;
+    const vat = 0.16 * classSession.price;
     
     await Commission.create({
       amount: commission,
@@ -356,7 +367,24 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
       VAT: vat,
     });
 
-    // Send email with ticket details
+    const splitDetails = await paystack.split.fetch(reference)
+
+    console.log(`split_data: ${splitDetails}`);
+
+    // await HostInvoice.create({
+    //   hostName: Host.firstName,
+    //   subAccountCode: Host.subAccountCode,
+    //   paymentReference: paymentReference,
+    //   amountPaid: sessionActualAmount,
+    //   bookingFee: split_data.platform_amount / 100,
+    //   sessionTitle: classSession.title,
+    //   vat: vat,
+    //   infimuseAmount: split_data.platform_amount / 100,
+    //   totalPayable: split_data.subaccount_amount / 100
+    // });
+
+    
+
     const ticketId = ticket.ticketId;
     const channelLink = classSession.channelLink;
 

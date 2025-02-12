@@ -21,7 +21,7 @@ const sequelize = new Sequelize(db_name, db_username, db_password, {
   dialectOptions: {
     ssl: {
       require: true,
-      rejectUnauthorized: false, // Required for Azure MySQL
+      rejectUnauthorized: false, 
     },
   },
   sync: {
@@ -50,6 +50,7 @@ db.classTickets = require("./classticket")(sequelize, DataTypes);
 db.customers = require("./customer")(sequelize, DataTypes);
 db.guests = require("./guest")(sequelize, DataTypes);
 db.hosts = require("./host")(sequelize, DataTypes);
+db.hostinvoices = require("./hostInvoice")(sequelize, DataTypes);
 db.locations = require("./location")(sequelize, DataTypes);
 db.notifications = require("./Notification")(sequelize, DataTypes);
 db.packageClasses = require("./packageclass")(sequelize, DataTypes);
@@ -107,6 +108,9 @@ db.communityMemberships = require("./communityMembership")(
   sequelize,
   DataTypes
 );
+
+db.hosts.hasMany(db.hostinvoices, { as: "host", foreignKey: "hostId" });
+db.customers.hasMany(db.hostinvoices, { as: "host", foreignKey: "customerId" });
 db.availabilities.hasOne(db.sessionBookings, {
   as: "sessionBooking",
   foreignKey: "availabilityId",

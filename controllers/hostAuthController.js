@@ -20,7 +20,7 @@ require("dotenv").config();
 const testKey = process.env.PAYSTACK_TEST_KEY;
 const liveKey = process.env.PAYSTACK_LIVE_KEY;
 const Paystack = require("paystack-sdk").Paystack;
-const paystack = new Paystack(testKey);
+const paystack = new Paystack(liveKey);
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.EXPIRES_IN,
@@ -205,54 +205,45 @@ exports.createHostSubAccount = async (req, res, next) => {
 
     const host = await Host.findOne({ where: { id: hostId } });
 
-
     if (!host) {
       return res.status(404).json({ error: "Host not found" });
     }
+
     if (host.haveAccount === true) {
       return res.status(400).json({ error: "Host already has a subaccount" });
-      
     }
 
-    const firstName = host.firstName;
-    const email = host.email;
     const checkHostInSubAccount = await SubAccount.findOne({
       where: { hostId },
     });
+    
     if (checkHostInSubAccount) {
       return res.status(400).json({ error: "Host already has a subaccount" });
     }
-    const subAccount = await paystack.subAccount.create({
+
+    // Initiate Paystack subaccount creation
+    const subAccountInitiation = await paystack.subAccount.create({
       business_name: business_name,
+      first_name: host.firstName,
+      email: host.email,
       settlement_bank: bank_code,
       account_number: account_number,
       currency: "KES",
       percentage_charge: process.env.PERCENTAGE_CHARGE,
+      primary_contact_name: host.firstName,
+      primary_contact_email: host.email,
+      primary_contact_phone: host.phone,
     });
 
-    console.log("Paystack subaccount response:", subAccount);
-
-    if (!subAccount || !subAccount.data) {
-      return res.status(400).json({
-        error: "Failed to create Paystack subaccount",
-        details: subAccount,
-      });
-    }
-
-    const newSubAccount = await SubAccount.create({
-      hostId: host.id,
-      firstName,
-      paystack_subaccount_code: subAccount.data.subaccount_code,
-      bank_account_number: account_number,
-      bank_code: bank_code,
-      business_name: business_name,
-      email: email,
+    // Return immediately with a pending status
+    return res.status(202).json({ 
+      msg: "Subaccount creation initiated", 
+      status: "pending",
+      reference: subAccountInitiation.data
     });
-    await host.update({ haveAccount: true });
 
-    return res.status(201).json({ msg: "Subaccount created", newSubAccount });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ Error: error.message });
   }
 };

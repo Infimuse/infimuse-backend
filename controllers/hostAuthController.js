@@ -213,56 +213,37 @@ exports.createHostSubAccount = async (req, res, next) => {
       return res.status(400).json({ error: "Host already has a subaccount" });
     }
 
-    const firstName = host.firstName;
-    const email = host.email;
-
     const checkHostInSubAccount = await SubAccount.findOne({
       where: { hostId },
     });
+    
     if (checkHostInSubAccount) {
       return res.status(400).json({ error: "Host already has a subaccount" });
     }
 
-    // Paystack subaccount creation with all the required parameters
-    const subAccount = await paystack.subAccount.create({
+    // Initiate Paystack subaccount creation
+    const subAccountInitiation = await paystack.subAccount.create({
       business_name: business_name,
-      first_name: firstName,  // Add first name
-      email: email,  // Add email
+      first_name: host.firstName,
+      email: host.email,
       settlement_bank: bank_code,
       account_number: account_number,
       currency: "KES",
       percentage_charge: process.env.PERCENTAGE_CHARGE,
-      primary_contact_name: firstName,  // Add primary contact
-      primary_contact_email: email,  // Add primary contact email
-      primary_contact_phone: host.phone, // Ensure the phone number is available
+      primary_contact_name: host.firstName,
+      primary_contact_email: host.email,
+      primary_contact_phone: host.phone,
     });
 
-    console.log("Paystack subaccount response:", subAccount);
-
-    if (!subAccount || !subAccount.data) {
-      return res.status(400).json({
-        error: "Failed to create Paystack subaccount",
-        details: subAccount,
-      });
-    }
-
-    // Create the subaccount in your local database
-    const newSubAccount = await SubAccount.create({
-      hostId: host.id,
-      firstName,
-      paystack_subaccount_code: subAccount.data.subaccount_code,
-      bank_account_number: account_number,
-      bank_code: bank_code,
-      business_name: business_name,
-      email: email,
+    // Return immediately with a pending status
+    return res.status(202).json({ 
+      msg: "Subaccount creation initiated", 
+      status: "pending",
+      reference: subAccountInitiation.data
     });
 
-    // Update host record to indicate they now have an account
-    await host.update({ haveAccount: true });
-
-    return res.status(201).json({ msg: "Subaccount created", newSubAccount });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ Error: error.message });
   }
 };

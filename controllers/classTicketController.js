@@ -12,7 +12,7 @@ const testCallbackUrl = "http://localhost:8079/api/v1/class-tickets/verify";
 const callbackUrl = "https://whatever.lat/api/v1/class-tickets/verify";
 const Community = db.communities;
 const Paystack = require("paystack-sdk").Paystack;
-const paystack = new Paystack(liveKey);
+const paystack = new Paystack(testKey);
 const TicketHolder = db.ticketHolders;
 const ClassTicket = db.classTickets;
 const Customer = db.customers;
@@ -189,19 +189,6 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
   const amountAfterTax = sessionAmount;
   const hostShare = Math.floor((100 - commissionPercentage) * 100) / 100; // Convert to percentage for split
 
-  const split = await paystack.split.create({
-    name: "Host Commission Split",
-    type: "percentage",
-    currency: "KES",  // Change to your currency if needed
-    subaccounts: [
-      {
-        subaccount: hostSubaccount.paystack_subaccount_code,
-        share: hostShare
-      }
-    ],
-    bearer_type: "account"
-  });
-  console.log(`split: ${split}`);
   
   const paymentDetails = {
     amount: totalAmount,
@@ -217,7 +204,6 @@ exports.initializeBookingPayment = asyncWrapper(async (req, res) => {
       commissionPercentage,
       hostPlanType: hostPlan.subscription
     },
-    split:split.data
   };
 
   const data = await paystackApi.initializePayment(paymentDetails);
@@ -371,17 +357,17 @@ exports.verifyPayment = asyncWrapper(async (req, res) => {
 
     console.log(`split_data: ${splitDetails}`);
 
-    // await HostInvoice.create({
-    //   hostName: Host.firstName,
-    //   subAccountCode: Host.subAccountCode,
-    //   paymentReference: paymentReference,
-    //   amountPaid: sessionActualAmount,
-    //   bookingFee: split_data.platform_amount / 100,
-    //   sessionTitle: classSession.title,
-    //   vat: vat,
-    //   infimuseAmount: split_data.platform_amount / 100,
-    //   totalPayable: split_data.subaccount_amount / 100
-    // });
+    await HostInvoice.create({
+      hostName: Host.firstName,
+      subAccountCode: Host.subAccountCode,
+      paymentReference: paymentReference,
+      amountPaid: sessionActualAmount,
+      bookingFee: split_data.platform_amount / 100,
+      sessionTitle: classSession.title,
+      vat: vat,
+      infimuseAmount: split_data.platform_amount / 100,
+      totalPayable: split_data.subaccount_amount / 100
+    });
 
     
 

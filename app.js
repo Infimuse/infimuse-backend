@@ -59,6 +59,7 @@ const freeExperienceRoutes = require("./routes/freeExperienceRoutes");
 const sessionVenueRoutes = require("./routes/sessionVenueRoutes");
 const sessionBookingRoutes = require("./routes/sessionBookingRoutes");
 const BankRoutes = require("./routes/bankRoutes");
+const subAccountWebhookRoutes = require("./routes/subAccountwebhook");
 const Host = db.hosts;
 const axios = require("axios");
 const TransferRecipient = db.transferRecipient;
@@ -342,6 +343,9 @@ app.use(`${url}/payouts`, payoutRoutes);
 app.use(`${url}/transactions`, paymentTransactionRoute);
 app.use(`${url}/my-wallet`, overallPayouts);
 app.use(`${url}/banks`, BankRoutes);
+
+// create subaccount
+app.use(`${url}/paystack`, subAccountWebhookRoutes);
 
 // notifications and comments
 app.use(`${url}/notifications`, notificationRoutes);

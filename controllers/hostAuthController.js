@@ -127,6 +127,7 @@ exports.hostSignup = async (req, res, next) => {
       .status(201)
       .json({ message: "Host created successfully", token, newHost });
   } catch (error) {
+    console.log(error)
     return res
       .status(500)
       .json({ message: "host created but already exists in mattermost" });
@@ -191,6 +192,7 @@ exports.hostLogin = async (req, res, next) => {
   }
   next();
 };
+
 exports.createHostSubAccount = async (req, res, next) => {
   try {
     const { account_number, bank_code, business_name } = req.body;
@@ -221,7 +223,7 @@ exports.createHostSubAccount = async (req, res, next) => {
       return res.status(400).json({ error: "Host already has a subaccount" });
     }
 
-    // Initiate Paystack subaccount creation
+
     const subAccountInitiation = await paystack.subAccount.create({
       business_name: business_name,
       first_name: host.firstName,
@@ -234,20 +236,44 @@ exports.createHostSubAccount = async (req, res, next) => {
       primary_contact_email: host.email,
       primary_contact_phone: host.phone,
     });
+    if (subAccountInitiation.data.status !== "active") {
+      return res.status(400).json({ error: "Subaccount creation failed" });
+      
+    }
+    await SubAccount.create({
+      bank_account_number: account_number,
+      bank_code,
+      business_name: business_name,
+      firstName: host.firstName,
+      email: host.email,
+      hostId,
+      paystack_subaccount_code: subAccountInitiation.data.subaccount_code,
+      // currency: "KES",
+      // percentage_charge: process.env.PERCENTAGE_CHARGE,
+      // primary_contact_name: host.firstName,
+      // primary_contact_email: host.email,
+      // primary_contact_phone: host.phone,
+    })
 
-    // Return immediately with a pending status
+
     return res.status(202).json({ 
       msg: "Subaccount creation initiated", 
       status: "pending",
-      reference: subAccountInitiation.data
+      data: subAccountInitiation
     });
 
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ Error: error.message });
+    console.error('Subaccount creation error:', {
+      message: error.message,
+      response: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.response?.data
+    });
   }
 };
-
 exports.hostProtect = async (req, res, next) => {
   try {
     let token;
